@@ -1,0 +1,41 @@
+// 测试数组访问操作符（[]）
+int main() {
+    int arr[5];
+    int i, sum;
+    
+    // 初始化数组
+    arr[0] = 10;
+    arr[1] = 20;
+    arr[2] = 30;
+    arr[3] = 40;
+    arr[4] = 50;
+    
+    // 基本数组访问
+    printf("arr[0] = %d\n", arr[0]);
+    printf("arr[1] = %d\n", arr[1]);
+    printf("arr[2] = %d\n", arr[2]);
+    
+    // 通过循环访问数组
+    sum = 0;
+    i = 0;
+    while (i < 5) {
+        sum = sum + arr[i];
+        printf("arr[%d] = %d, sum = %d\n", i, arr[i], sum);
+        i = i + 1;
+    }
+    
+    printf("Total sum = %d\n", sum);
+    
+    // 修改数组元素
+    arr[2] = 99;
+    printf("After modification: arr[2] = %d\n", arr[2]);
+    
+    // 数组元素作为条件
+    if (arr[0] > arr[1]) {
+        printf("arr[0] > arr[1]\n");
+    } else {
+        printf("arr[0] <= arr[1]\n");
+    }
+    
+    return 0;
+}

@@ -2,6 +2,32 @@
 export type int = number;
 export type char = string;
 
+// 运算符优先级枚举
+export enum Precedence {
+  Assign = 1,    // 赋值 =
+  Cond = 2,      // 三元操作符 ? :
+  Lor = 3,       // 逻辑或 ||
+  Land = 4,      // 逻辑与 &&
+  Or = 5,        // 按位或 |
+  Xor = 6,       // 按位异或 ^
+  And = 7,       // 按位与 &
+  Eq = 8,        // 等于 ==
+  Ne = 8,        // 不等于 !=
+  Lt = 9,        // 小于 <
+  Gt = 9,        // 大于 >
+  Le = 9,        // 小于等于 <=
+  Ge = 9,        // 大于等于 >=
+  Shl = 10,      // 左移 <<
+  Shr = 10,      // 右移 >>
+  Add = 11,      // 加法 +
+  Sub = 11,      // 减法 -
+  Mul = 12,      // 乘法 *
+  Div = 12,      // 除法 /
+  Mod = 12,      // 取模 %
+  Inc = 13,      // 前置/后置 ++
+  Dec = 13       // 前置/后置 --
+}
+
 // 指令集枚举 - 按照cpc.c的顺序
 export enum Instruction {
   IMM = 0,   // 立即数加载
@@ -45,15 +71,13 @@ export enum Instruction {
   EXIT = 38    // 退出
 }
 
-// Token类型枚举
+// Token类型枚举 - 按语义分类
 export enum TokenType {
   // 基础类型
   Num = "Num",
-  Fun = "Fun", 
-  Sys = "Sys",
-  Glo = "Glo",
-  Loc = "Loc",
   Id = "Id",
+  String = "String",
+  EOF = "EOF",
   
   // 关键字
   Char = "Char",
@@ -65,22 +89,10 @@ export enum TokenType {
   Sizeof = "Sizeof",
   While = "While",
   
-  // 操作符
+  // 赋值操作符
   Assign = "=",
-  Cond = "?",
-  Lor = "||",
-  Land = "&&", 
-  Or = "|",
-  Xor = "^",
-  And = "&",
-  Eq = "==",
-  Ne = "!=",
-  Lt = "<",
-  Gt = ">",
-  Le = "<=",
-  Ge = ">=",
-  Shl = "<<",
-  Shr = ">>",
+  
+  // 算术操作符
   Add = "+",
   Sub = "-",
   Mul = "*",
@@ -88,9 +100,32 @@ export enum TokenType {
   Mod = "%",
   Inc = "++",
   Dec = "--",
-  Brak = "[",
   
-  // 分隔符
+  // 比较操作符
+  Eq = "==",
+  Ne = "!=",
+  Lt = "<",
+  Gt = ">",
+  Le = "<=",
+  Ge = ">=",
+  
+  // 位运算操作符
+  Or = "|",
+  Xor = "^",
+  And = "&",
+  Shl = "<<",
+  Shr = ">>",
+  Not = "!",
+  Tilde = "~",
+  
+  // 逻辑操作符
+  Lor = "||",
+  Land = "&&",
+  
+  // 条件操作符
+  Cond = "?",
+  
+  // 括号和分隔符
   Semicolon = ";",
   Comma = ",",
   Colon = ":",
@@ -100,12 +135,9 @@ export enum TokenType {
   RightBrace = "}",
   LeftBracket = "[",
   RightBracket = "]",
-  Not = "!",
-  Tilde = "~",
   
-  // 特殊
-  String = "String",
-  EOF = "EOF"
+  // 数组访问操作符
+  Brak = "["
 }
 
 // 符号类型

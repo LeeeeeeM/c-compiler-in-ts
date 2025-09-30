@@ -1,9 +1,8 @@
 import * as fs from 'fs';
-import { Lexer } from './lexer';
 import { Parser } from './parser';
 import { CodeGenerator } from './code-generator';
 import { VirtualMachine } from './vm';
-import { TokenType, CompilerConfig, CompileResult } from './types';
+import { CompilerConfig } from './types';
 
 // 编译器核心类
 export class Compiler {
@@ -35,10 +34,7 @@ export class Compiler {
       // 加载源文件
       const source = this.loadSource(filename);
       
-      // 词法分析
-      const lexer = new Lexer(source);
-      
-      // 语法分析
+      // 语法分析（Parser内部会创建Lexer）
       const parser = new Parser(source, this.debugMode);
       parser.parse();
       

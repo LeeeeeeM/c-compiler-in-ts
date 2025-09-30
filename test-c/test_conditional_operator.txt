@@ -1,0 +1,27 @@
+// 测试条件操作符（三元操作符 ? :）
+int main() {
+    int x, y, result;
+    
+    // 基本条件操作符测试
+    x = 10;
+    y = 20;
+    result = x > y ? 100 : 200;
+    printf("x=%d, y=%d, result=%d\n", x, y, result);
+    
+    // 嵌套条件操作符测试
+    x = 5;
+    y = 15;
+    result = x > y ? 1 : (x == y ? 0 : -1);
+    printf("x=%d, y=%d, nested result=%d\n", x, y, result);
+    
+    // 条件操作符与算术运算结合
+    x = 8;
+    result = x % 2 == 0 ? x * 2 : x + 1;
+    printf("x=%d, even/odd result=%d\n", x, result);
+    
+    x = 7;
+    result = x % 2 == 0 ? x * 2 : x + 1;
+    printf("x=%d, even/odd result=%d\n", x, result);
+    
+    return 0;
+}

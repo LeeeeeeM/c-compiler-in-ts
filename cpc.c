@@ -690,8 +690,9 @@ int load_src(char* file) {
     return 0;
 }
 
-// after bootstrap use [int] istead of [int32_t]
-int32_t main(int32_t argc, char** argv) {
+#undef int
+int main(int argc, char** argv) {
+#define int int64_t
     MAX_SIZE = 128 * 1024 * 8; // 1MB = 128k * 64bit
     // load source code
     if (load_src(*(argv+1)) != 0) return -1;

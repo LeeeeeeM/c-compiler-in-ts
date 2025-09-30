@@ -164,6 +164,14 @@ export class SymbolTable {
     return this.currentSymbol;
   }
 
+  // 获取当前符号，如果为null则抛出错误
+  public getCurrentSymbolOrThrow(): Symbol {
+    if (!this.currentSymbol) {
+      throw new Error('No current symbol available');
+    }
+    return this.currentSymbol;
+  }
+
   // 设置当前符号
   public setCurrentSymbol(symbol: Symbol): void {
     this.currentSymbol = symbol;

@@ -1,0 +1,25 @@
+// 测试数组访问操作符（使用指针模拟）
+int main() {
+    int *arr;
+    int x, y, z;
+    
+    // 模拟数组元素
+    x = 10;  // arr[0]
+    y = 20;  // arr[1] 
+    z = 30;  // arr[2]
+    
+    printf("Array elements: x=%d, y=%d, z=%d\n", x, y, z);
+    
+    // 测试指针算术（模拟数组访问）
+    arr = &x;  // arr指向第一个元素
+    printf("arr points to: %d\n", *arr);
+    
+    // 通过指针访问"数组"元素
+    printf("arr[0] = %d\n", *arr);
+    arr = arr + 1;  // 移动到下一个元素
+    printf("arr[1] = %d\n", *arr);
+    arr = arr + 1;  // 移动到下一个元素
+    printf("arr[2] = %d\n", *arr);
+    
+    return 0;
+}

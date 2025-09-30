@@ -1,0 +1,13 @@
+// 简单数组访问测试
+int main() {
+    int x;
+    int *p;
+    
+    x = 42;
+    p = &x;
+    
+    printf("x = %d\n", x);
+    printf("p[0] = %d\n", p[0]);
+    
+    return 0;
+}

@@ -1,4 +1,4 @@
-import { Instruction, InstructionData, Symbol, SymbolType, SymbolClass, TokenType } from './types';
+import { Instruction, InstructionData, Symbol, SymbolType, SymbolClass, TokenType, Precedence } from './types';
 import { SymbolTable } from './symbol-table';
 import { Parser } from './parser';
 import { Lexer } from './lexer';
@@ -110,7 +110,7 @@ export class CodeGenerator {
         i = 0; // 参数个数
         
         while (this.currentToken.type !== TokenType.RightParen) {
-          this.parseExpression(0); // Assign precedence
+          this.parseExpression(Precedence.Assign); // Assign precedence
           this.emit(Instruction.PUSH);
           i++;
           if (this.currentToken.type === TokenType.Comma) {
@@ -170,17 +170,17 @@ export class CodeGenerator {
         }
         
         this.assert(TokenType.RightParen);
-        this.parseExpression(0); // Inc precedence
+        this.parseExpression(Precedence.Inc); // Inc precedence
         this.currentType = tmpType;
       } else {
-        this.parseExpression(0); // Assign precedence
+        this.parseExpression(Precedence.Assign); // Assign precedence
         this.assert(TokenType.RightParen);
       }
     }
     // 解引用
     else if (this.currentToken.type === TokenType.Mul) {
       this.assert(TokenType.Mul);
-      this.parseExpression(13); // Inc precedence (与C版本保持一致)
+      this.parseExpression(Precedence.Inc); // Inc precedence (与C版本保持一致)
       
       if (this.currentType === SymbolType.PTR) {
         this.currentType = SymbolType.INT; // 解引用后变成INT类型
@@ -196,7 +196,7 @@ export class CodeGenerator {
     // 取地址
     else if (this.currentToken.type === TokenType.And) {
       this.assert(TokenType.And);
-      this.parseExpression(0); // Inc precedence
+      this.parseExpression(Precedence.Inc); // Inc precedence
       
       // 取地址操作：回滚加载指令（与C版本逻辑一致）
       if (this.code.length > 0) {
@@ -214,7 +214,7 @@ export class CodeGenerator {
     // 逻辑非
     else if (this.currentToken.type === TokenType.Not) {
       this.assert(TokenType.Not);
-      this.parseExpression(0); // Inc precedence
+      this.parseExpression(Precedence.Inc); // Inc precedence
       this.emit(Instruction.PUSH);
       this.emit(Instruction.IMM, 0);
       this.emit(Instruction.EQ);
@@ -223,7 +223,7 @@ export class CodeGenerator {
     // 按位取反
     else if (this.currentToken.type === TokenType.Tilde) {
       this.assert(TokenType.Tilde);
-      this.parseExpression(0); // Inc precedence
+      this.parseExpression(Precedence.Inc); // Inc precedence
       this.emit(Instruction.PUSH);
       this.emit(Instruction.IMM, -1);
       this.emit(Instruction.XOR);
@@ -232,13 +232,13 @@ export class CodeGenerator {
     // 正号
     else if (this.currentToken.type === TokenType.Add) {
       this.assert(TokenType.Add);
-      this.parseExpression(0); // Inc precedence
+      this.parseExpression(Precedence.Inc); // Inc precedence
       this.currentType = SymbolType.INT;
     }
     // 负号
     else if (this.currentToken.type === TokenType.Sub) {
       this.assert(TokenType.Sub);
-      this.parseExpression(0); // Inc precedence
+      this.parseExpression(Precedence.Inc); // Inc precedence
       this.emit(Instruction.PUSH);
       this.emit(Instruction.IMM, -1);
       this.emit(Instruction.MUL);
@@ -248,7 +248,7 @@ export class CodeGenerator {
     else if (this.currentToken.type === TokenType.Inc || this.currentToken.type === TokenType.Dec) {
       i = this.currentToken.type === TokenType.Inc ? 1 : -1;
       this.nextToken();
-      this.parseExpression(0); // Inc precedence
+      this.parseExpression(Precedence.Inc); // Inc precedence
       
       // 保存变量地址，然后加载变量值（与C版本逻辑一致）
       if (this.code[this.code.length - 1]?.op === Instruction.LC) {
@@ -283,7 +283,7 @@ export class CodeGenerator {
         } else {
           throw new Error(`Line ${this.currentToken.line}: Invalid assignment`);
         }
-        this.parseExpression(0); // Assign precedence
+        this.parseExpression(Precedence.Assign); // Assign precedence
         this.currentType = tmpType;
         this.emit(this.currentType === SymbolType.CHAR ? Instruction.SC : Instruction.SI);
       }
@@ -292,12 +292,12 @@ export class CodeGenerator {
         this.assert(TokenType.Cond);
         this.emit(Instruction.JZ, 0);
         const jzIndex = this.code.length - 1;
-        this.parseExpression(0); // Assign precedence
+        this.parseExpression(Precedence.Assign); // Assign precedence
         this.assert(TokenType.Colon);
         this.emit(Instruction.JMP, 0);
         const jmpIndex = this.code.length - 1;
         this.setCodeAt(jzIndex, this.code.length);
-        this.parseExpression(0); // Cond precedence
+        this.parseExpression(Precedence.Cond); // Cond precedence
         this.setCodeAt(jmpIndex, this.code.length);
       }
       // 逻辑操作符
@@ -476,14 +476,15 @@ export class CodeGenerator {
       else if (this.currentToken.type === TokenType.Brak) {
         this.assert(TokenType.Brak);
         this.emit(Instruction.PUSH);
-        this.parseExpression(0); // Assign precedence
+        this.parseExpression(Precedence.Assign); // Assign precedence
         this.assert(TokenType.RightBracket);
         
+        // 检查类型是否支持索引操作（与C版本逻辑一致）
         if (tmpType === SymbolType.PTR) {
           this.emit(Instruction.PUSH);
           this.emit(Instruction.IMM, 8);
           this.emit(Instruction.MUL);
-        } else {
+        } else if (tmpType === SymbolType.INT || tmpType === SymbolType.CHAR) {
           throw new Error(`Line ${this.currentToken.line}: Invalid index operation`);
         }
         this.emit(Instruction.ADD);
@@ -506,28 +507,29 @@ export class CodeGenerator {
   // 获取Token优先级
   private getTokenPrecedence(tokenType: TokenType): number {
     const precedences: { [key in TokenType]?: number } = {
-      [TokenType.Assign]: 1,
-      [TokenType.Cond]: 2,
-      [TokenType.Lor]: 3,
-      [TokenType.Land]: 4,
-      [TokenType.Or]: 5,
-      [TokenType.Xor]: 6,
-      [TokenType.And]: 7,
-      [TokenType.Eq]: 8,
-      [TokenType.Ne]: 8,
-      [TokenType.Lt]: 9,
-      [TokenType.Gt]: 9,
-      [TokenType.Le]: 9,
-      [TokenType.Ge]: 9,
-      [TokenType.Shl]: 10,
-      [TokenType.Shr]: 10,
-      [TokenType.Add]: 11,
-      [TokenType.Sub]: 11,
-      [TokenType.Mul]: 12,
-      [TokenType.Div]: 12,
-      [TokenType.Mod]: 12,
-      [TokenType.Inc]: 13,
-      [TokenType.Dec]: 13
+      [TokenType.Assign]: Precedence.Assign,
+      [TokenType.Cond]: Precedence.Cond,
+      [TokenType.Lor]: Precedence.Lor,
+      [TokenType.Land]: Precedence.Land,
+      [TokenType.Or]: Precedence.Or,
+      [TokenType.Xor]: Precedence.Xor,
+      [TokenType.And]: Precedence.And,
+      [TokenType.Eq]: Precedence.Eq,
+      [TokenType.Ne]: Precedence.Ne,
+      [TokenType.Lt]: Precedence.Lt,
+      [TokenType.Gt]: Precedence.Gt,
+      [TokenType.Le]: Precedence.Le,
+      [TokenType.Ge]: Precedence.Ge,
+      [TokenType.Shl]: Precedence.Shl,
+      [TokenType.Shr]: Precedence.Shr,
+      [TokenType.Add]: Precedence.Add,
+      [TokenType.Sub]: Precedence.Sub,
+      [TokenType.Mul]: Precedence.Mul,
+      [TokenType.Div]: Precedence.Div,
+      [TokenType.Mod]: Precedence.Mod,
+      [TokenType.Inc]: Precedence.Inc,
+      [TokenType.Dec]: Precedence.Dec,
+      [TokenType.Brak]: Precedence.Inc  // 数组访问优先级与Inc相同
     };
     return precedences[tokenType] || 0;
   }
@@ -537,7 +539,7 @@ export class CodeGenerator {
     if (this.currentToken.type === TokenType.If) {
       this.assert(TokenType.If);
       this.assert(TokenType.LeftParen);
-      this.parseExpression(0); // Assign precedence
+      this.parseExpression(Precedence.Assign); // Assign precedence
       this.assert(TokenType.RightParen);
       this.emit(Instruction.JZ, 0);
       const jzIndex = this.code.length - 1;
@@ -558,7 +560,7 @@ export class CodeGenerator {
       this.assert(TokenType.While);
       const loopStart = this.code.length;
       this.assert(TokenType.LeftParen);
-      this.parseExpression(0); // Assign precedence
+      this.parseExpression(Precedence.Assign); // Assign precedence
       this.assert(TokenType.RightParen);
       this.emit(Instruction.JZ, 0);
       const jzIndex = this.code.length - 1;
@@ -569,7 +571,7 @@ export class CodeGenerator {
     else if (this.currentToken.type === TokenType.Return) {
       this.assert(TokenType.Return);
       if (this.currentToken.type !== TokenType.Semicolon) {
-        this.parseExpression(0); // Assign precedence
+        this.parseExpression(Precedence.Assign); // Assign precedence
       }
       this.assert(TokenType.Semicolon);
       this.emit(Instruction.RET);
@@ -607,7 +609,7 @@ export class CodeGenerator {
         if (!symbol) {
           // 添加新的局部符号
           this.symbolTable.addSymbol(name, TokenType.Id, SymbolClass.Loc, finalType, 0);
-          symbol = this.symbolTable.getCurrentSymbol()!;
+          symbol = this.symbolTable.getCurrentSymbolOrThrow();
         } else {
           // 符号已存在，隐藏全局符号并设置为局部符号
           this.symbolTable.hideGlobal();
@@ -623,7 +625,7 @@ export class CodeGenerator {
       this.assert(TokenType.Semicolon);
     }
     else {
-      this.parseExpression(0); // Assign precedence
+      this.parseExpression(Precedence.Assign); // Assign precedence
       this.assert(TokenType.Semicolon);
     }
   }
@@ -718,7 +720,7 @@ export class CodeGenerator {
         if (!symbol) {
           // 添加新的局部符号
           this.symbolTable.addSymbol(name, TokenType.Id, SymbolClass.Loc, finalType, ++i);
-          symbol = this.symbolTable.getCurrentSymbol()!;
+          symbol = this.symbolTable.getCurrentSymbolOrThrow();
         } else {
           // 符号已存在，隐藏全局符号并设置为局部符号
           this.symbolTable.hideGlobal();

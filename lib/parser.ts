@@ -73,6 +73,7 @@ export class Parser {
     let i = 0; // 枚举索引
     while (this.currentToken.type !== TokenType.RightBrace) {
       this.symbolTable.checkNewId(this.currentToken.value);
+      const name = this.currentToken.value;
       this.assert(TokenType.Id);
       
       // 处理自定义枚举索引
@@ -82,10 +83,8 @@ export class Parser {
         i = this.currentToken.value;
       }
       
-      const symbol = this.symbolTable.getCurrentSymbol()!;
-      symbol.class = SymbolClass.Num;
-      symbol.type = SymbolType.INT;
-      symbol.value = i++;
+      // 添加枚举符号
+      this.symbolTable.addSymbol(name, TokenType.Id, SymbolClass.Num, SymbolType.INT, i++);
       
       if (this.currentToken.type === TokenType.Comma) {
         this.assert(TokenType.Comma);
@@ -174,51 +173,53 @@ export class Parser {
 
   // 解析语句
   public parseStatement(): void {
-    if (this.currentToken.type === TokenType.If) {
+    const tokenType = this.currentToken.type;
+    
+    if (tokenType === TokenType.If) {
       this.assert(TokenType.If);
       this.assert(TokenType.LeftParen);
       this.parseExpression(0); // Assign precedence
       this.assert(TokenType.RightParen);
       this.parseStatement(); // 解析true语句
       
-      if ((this.currentToken.type as any) === TokenType.Else) {
+      if (this.currentToken.type === TokenType.Else) {
         this.assert(TokenType.Else);
         this.parseStatement(); // 解析false语句
       }
     }
-    else if (this.currentToken.type === TokenType.While) {
+    else if (tokenType === TokenType.While) {
       this.assert(TokenType.While);
       this.assert(TokenType.LeftParen);
       this.parseExpression(0); // Assign precedence
       this.assert(TokenType.RightParen);
       this.parseStatement();
     }
-    else if (this.currentToken.type === TokenType.Return) {
+    else if (tokenType === TokenType.Return) {
       this.assert(TokenType.Return);
-      if ((this.currentToken.type as any) !== TokenType.Semicolon) {
+      if (this.currentToken.type !== TokenType.Semicolon) {
         this.parseExpression(0); // Assign precedence
       }
       this.assert(TokenType.Semicolon);
     }
-    else if (this.currentToken.type === TokenType.LeftBrace) {
+    else if (tokenType === TokenType.LeftBrace) {
       this.assert(TokenType.LeftBrace);
-      while ((this.currentToken.type as any) !== TokenType.RightBrace) {
+      while (this.currentToken.type !== TokenType.RightBrace) {
         this.parseStatement();
       }
       this.assert(TokenType.RightBrace);
     }
-    else if (this.currentToken.type === TokenType.Semicolon) {
+    else if (tokenType === TokenType.Semicolon) {
       this.assert(TokenType.Semicolon);
     }
-    else if (this.currentToken.type === TokenType.Int || this.currentToken.type === TokenType.Char) {
+    else if (tokenType === TokenType.Int || tokenType === TokenType.Char) {
       // 局部变量声明
       const type = this.parseBaseType();
       
-      while ((this.currentToken.type as any) !== TokenType.Semicolon && 
-             (this.currentToken.type as any) !== TokenType.EOF) {
+      while (this.currentToken.type !== TokenType.Semicolon && 
+             this.currentToken.type !== TokenType.EOF) {
         // 解析指针的星号
         let pointerLevel = 0;
-        while ((this.currentToken.type as any) === TokenType.Mul) {
+        while (this.currentToken.type === TokenType.Mul) {
           this.assert(TokenType.Mul);
           pointerLevel++;
         }
@@ -232,7 +233,7 @@ export class Parser {
         // 添加新的局部符号
         this.symbolTable.addSymbol(name, TokenType.Id, SymbolClass.Loc, finalType, 0);
         
-        if ((this.currentToken.type as any) === TokenType.Comma) {
+        if (this.currentToken.type === TokenType.Comma) {
           this.assert(TokenType.Comma);
         }
       }
@@ -260,7 +261,7 @@ export class Parser {
       this.assert(TokenType.Id);
       
       this.symbolTable.addSymbol(name, TokenType.Id, SymbolClass.Glo, type, 0);
-      const symbol = this.symbolTable.getCurrentSymbol()!;
+      const symbol = this.symbolTable.getCurrentSymbolOrThrow();
       
       if (this.currentToken.type === TokenType.LeftParen) {
         // 函数
