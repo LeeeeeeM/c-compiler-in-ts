@@ -434,21 +434,21 @@ export class CodeGenerator {
       else if (this.currentToken.type === TokenType.Mul) {
         this.assert(TokenType.Mul);
         this.emit(Instruction.PUSH);
-        this.parseExpression(0); // Inc precedence
+        this.parseExpression(this.getTokenPrecedence(TokenType.Inc));
         this.emit(Instruction.MUL);
         this.currentType = SymbolType.INT;
       }
       else if (this.currentToken.type === TokenType.Div) {
         this.assert(TokenType.Div);
         this.emit(Instruction.PUSH);
-        this.parseExpression(0); // Inc precedence
+        this.parseExpression(this.getTokenPrecedence(TokenType.Inc));
         this.emit(Instruction.DIV);
         this.currentType = SymbolType.INT;
       }
       else if (this.currentToken.type === TokenType.Mod) {
         this.assert(TokenType.Mod);
         this.emit(Instruction.PUSH);
-        this.parseExpression(0); // Inc precedence
+        this.parseExpression(this.getTokenPrecedence(TokenType.Inc));
         this.emit(Instruction.MOD);
         this.currentType = SymbolType.INT;
       }
@@ -545,7 +545,7 @@ export class CodeGenerator {
       
       if (this.currentToken.type === TokenType.Else) {
         this.assert(TokenType.Else);
-        this.setCodeAt(jzIndex, this.code.length + 3);
+        this.setCodeAt(jzIndex, this.code.length + 1);
         this.emit(Instruction.JMP, 0);
         const jmpIndex = this.code.length - 1;
         this.parseStatement(); // 解析false语句
@@ -582,6 +582,44 @@ export class CodeGenerator {
       this.assert(TokenType.RightBrace);
     }
     else if (this.currentToken.type === TokenType.Semicolon) {
+      this.assert(TokenType.Semicolon);
+    }
+    else if (this.currentToken.type === TokenType.Int || this.currentToken.type === TokenType.Char) {
+      // 局部变量声明
+      const type = this.parseBaseType();
+      
+      while (this.currentToken.type !== TokenType.Semicolon && 
+             this.currentToken.type !== TokenType.EOF) {
+        // 解析指针的星号
+        let pointerLevel = 0;
+        while (this.currentToken.type === TokenType.Mul) {
+          this.assert(TokenType.Mul);
+          pointerLevel++;
+        }
+        
+        const finalType = this.symbolTable.calculatePointerType(type, pointerLevel);
+        
+        const name = this.currentToken.value;
+        this.assert(TokenType.Id);
+        
+        // 检查是否是新的局部变量
+        let symbol = this.symbolTable.lookupSymbol(name);
+        if (!symbol) {
+          // 添加新的局部符号
+          this.symbolTable.addSymbol(name, TokenType.Id, SymbolClass.Loc, finalType, 0);
+          symbol = this.symbolTable.getCurrentSymbol()!;
+        } else {
+          // 符号已存在，隐藏全局符号并设置为局部符号
+          this.symbolTable.hideGlobal();
+          symbol.class = SymbolClass.Loc;
+          symbol.type = finalType;
+          symbol.value = 0;
+        }
+        
+        if (this.currentToken.type === TokenType.Comma) {
+          this.assert(TokenType.Comma);
+        }
+      }
       this.assert(TokenType.Semicolon);
     }
     else {
@@ -675,15 +713,19 @@ export class CodeGenerator {
         const name = this.currentToken.value;
         this.assert(TokenType.Id);
         
-        const symbol = this.symbolTable.lookupSymbol(name);
+        // 检查是否是新的局部变量
+        let symbol = this.symbolTable.lookupSymbol(name);
         if (!symbol) {
-          throw new Error(`Symbol ${name} not found in symbol table`);
+          // 添加新的局部符号
+          this.symbolTable.addSymbol(name, TokenType.Id, SymbolClass.Loc, finalType, ++i);
+          symbol = this.symbolTable.getCurrentSymbol()!;
+        } else {
+          // 符号已存在，隐藏全局符号并设置为局部符号
+          this.symbolTable.hideGlobal();
+          symbol.class = SymbolClass.Loc;
+          symbol.type = finalType;
+          symbol.value = ++i;
         }
-        
-        this.symbolTable.hideGlobal();
-        symbol.class = SymbolClass.Loc;
-        symbol.type = finalType;
-        symbol.value = ++i;
         
         if (this.currentToken.type === TokenType.Comma) {
           this.assert(TokenType.Comma);
@@ -778,7 +820,7 @@ export class CodeGenerator {
       else if (this.currentToken.type === TokenType.Int || this.currentToken.type === TokenType.Char) {
         const baseType = this.parseBaseType();
         
-        // 解析变量或函数定义
+        // 觨析变量或函数定义
         while (this.currentToken.type !== TokenType.Semicolon && this.currentToken.type !== TokenType.RightBrace) {
           // 解析指针的星号
           let type = baseType;

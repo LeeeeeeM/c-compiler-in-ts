@@ -658,7 +658,7 @@ void write_as() {
     insts = "IMM ,LEA ,JMP ,JZ  ,JNZ ,CALL,NVAR,DARG,RET ,LI  ,LC  ,SI  ,SC  ,PUSH,"
         "OR  ,XOR ,AND ,EQ  ,NE  ,LT  ,GT  ,LE  ,GE  ,SHL ,SHR ,ADD ,SUB ,MUL ,DIV ,MOD ,"
         "OPEN,READ,CLOS,PRTF,MALC,FREE,MSET,MCMP,EXIT,";
-    fd = open("assemble-c.txt", 0x0001 | 0x0200, 0644);
+    fd = open("assemble-c.txt", 0x0001 | 0x0200 | 0x0400, 0644);
     buffer = malloc(100);
     while (code_dump < code) {
         sprintf(buffer, "(%lld) %8.4s", ++code_dump, insts + (*code_dump * 5));

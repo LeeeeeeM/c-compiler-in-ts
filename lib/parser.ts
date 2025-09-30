@@ -126,11 +126,12 @@ export class Parser {
 
   // 解析表达式
   public parseExpression(precedence: number = 0): void {
-    // 简化版本：跳过表达式直到遇到分号
+    // 简化版本：跳过表达式直到遇到分号或右大括号
     let parenCount = 0;
     
     while (this.currentToken && 
-           !(this.currentToken.type === TokenType.Semicolon && parenCount === 0)) {
+           !(this.currentToken.type === TokenType.Semicolon && parenCount === 0) &&
+           !(this.currentToken.type === TokenType.RightBrace && parenCount === 0)) {
       
       if (this.currentToken.type === TokenType.LeftParen) {
         parenCount++;
@@ -213,7 +214,8 @@ export class Parser {
       // 局部变量声明
       const type = this.parseBaseType();
       
-      while ((this.currentToken.type as any) !== TokenType.Semicolon) {
+      while ((this.currentToken.type as any) !== TokenType.Semicolon && 
+             (this.currentToken.type as any) !== TokenType.EOF) {
         // 解析指针的星号
         let pointerLevel = 0;
         while ((this.currentToken.type as any) === TokenType.Mul) {
@@ -242,11 +244,87 @@ export class Parser {
     }
   }
 
+  // 解析变量或函数定义
+  private parseVarOrFuncDefinition(baseType: SymbolType): void {
+    while (this.currentToken.type !== TokenType.Semicolon && 
+           this.currentToken.type !== TokenType.RightBrace &&
+           this.currentToken.type !== TokenType.EOF) {
+      // 解析指针的星号
+      let type = baseType;
+      while (this.currentToken.type === TokenType.Mul) {
+        this.assert(TokenType.Mul);
+        type = SymbolType.PTR;
+      }
+      
+      const name = this.currentToken.value;
+      this.assert(TokenType.Id);
+      
+      this.symbolTable.addSymbol(name, TokenType.Id, SymbolClass.Glo, type, 0);
+      const symbol = this.symbolTable.getCurrentSymbol()!;
+      
+      if (this.currentToken.type === TokenType.LeftParen) {
+        // 函数
+        symbol.class = SymbolClass.Fun;
+        symbol.value = 0; // 将在代码生成时设置
+        
+        this.assert(TokenType.LeftParen);
+        this.parseParam();
+        this.assert(TokenType.RightParen);
+        this.assert(TokenType.LeftBrace);
+        this.parseFunction();
+        
+        if (name === 'main') {
+          this.symbolTable.setMainSymbol(symbol);
+        }
+        
+        // 函数定义结束后，退出while循环
+        break;
+      } else {
+        // 变量
+        symbol.class = SymbolClass.Glo;
+        symbol.value = 0; // 将在代码生成时设置
+        
+        // 处理赋值
+        if (this.currentToken.type === TokenType.Assign) {
+          this.assert(TokenType.Assign);
+          this.assert(TokenType.Num);
+          symbol.value = this.currentToken.value;
+          this.nextToken();
+        }
+      }
+      
+      // 处理 int a,b,c;
+      if (this.currentToken.type === TokenType.Comma) {
+        this.assert(TokenType.Comma);
+      }
+    }
+    
+    // 跳过分号
+    if (this.currentToken.type === TokenType.Semicolon) {
+      this.assert(TokenType.Semicolon);
+    }
+  }
+
   // 解析函数
   public parseFunction(): void {
-    // 直接解析函数体中的语句
-    while (this.currentToken.type !== TokenType.RightBrace) {
-      this.parseStatement();
+    // 简单跳过函数体
+    // 当进入这个函数时，LeftBrace已经被assert了，当前token是函数体的第一个token
+    let braceCount = 1;
+    
+    while (braceCount > 0 && this.currentToken.type !== TokenType.EOF) {
+      if (this.currentToken.type === TokenType.LeftBrace) {
+        braceCount++;
+      } else if (this.currentToken.type === TokenType.RightBrace) {
+        braceCount--;
+      }
+      
+      if (braceCount > 0) {
+        this.nextToken();
+      }
+    }
+    
+    if (this.currentToken.type === TokenType.RightBrace) {
+      this.assert(TokenType.RightBrace);
     }
     
     // 恢复全局变量
@@ -264,58 +342,7 @@ export class Parser {
         const baseType = this.parseBaseType();
         
         // 解析变量或函数定义
-        while ((this.currentToken.type as any) !== TokenType.Semicolon && (this.currentToken.type as any) !== TokenType.RightBrace) {
-          // 解析指针的星号
-          let type = baseType;
-          while ((this.currentToken.type as any) === TokenType.Mul) {
-            this.assert(TokenType.Mul);
-            type = SymbolType.PTR;
-          }
-          
-          const name = this.currentToken.value;
-          this.assert(TokenType.Id);
-          
-          this.symbolTable.addSymbol(name, TokenType.Id, SymbolClass.Glo, type, 0);
-          const symbol = this.symbolTable.getCurrentSymbol()!;
-          
-          if ((this.currentToken.type as any) === TokenType.LeftParen) {
-            // 函数
-            symbol.class = SymbolClass.Fun;
-            symbol.value = 0; // 将在代码生成时设置
-            
-            this.assert(TokenType.LeftParen);
-            this.parseParam();
-            this.assert(TokenType.RightParen);
-            this.assert(TokenType.LeftBrace);
-            this.parseFunction();
-            
-            if (name === 'main') {
-              this.symbolTable.setMainSymbol(symbol);
-            }
-          } else {
-            // 变量
-            symbol.class = SymbolClass.Glo;
-            symbol.value = 0; // 将在代码生成时设置
-            
-            // 处理赋值
-            if ((this.currentToken.type as any) === TokenType.Assign) {
-              this.assert(TokenType.Assign);
-              this.assert(TokenType.Num);
-              symbol.value = this.currentToken.value;
-              this.nextToken();
-            }
-          }
-          
-          // 处理 int a,b,c;
-          if ((this.currentToken.type as any) === TokenType.Comma) {
-            this.assert(TokenType.Comma);
-          }
-        }
-        
-        // 跳过分号
-        if ((this.currentToken.type as any) === TokenType.Semicolon) {
-          this.assert(TokenType.Semicolon);
-        }
+        this.parseVarOrFuncDefinition(baseType);
       } else {
         // 跳过不认识的token
         this.nextToken();
