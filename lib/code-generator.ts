@@ -180,7 +180,7 @@ export class CodeGenerator {
     // 解引用
     else if (this.currentToken.type === TokenType.Mul) {
       this.assert(TokenType.Mul);
-      this.parseExpression(0); // Inc precedence
+      this.parseExpression(13); // Inc precedence (与C版本保持一致)
       
       if (this.currentType === SymbolType.PTR) {
         this.currentType = SymbolType.INT; // 解引用后变成INT类型
@@ -198,12 +198,14 @@ export class CodeGenerator {
       this.assert(TokenType.And);
       this.parseExpression(0); // Inc precedence
       
-      // 取地址操作：移除最后的LI/LC指令，保留LEA或IMM指令
+      // 取地址操作：回滚加载指令（与C版本逻辑一致）
       if (this.code.length > 0) {
         const lastInstruction = this.code[this.code.length - 1];
         if (lastInstruction.op === Instruction.LI || lastInstruction.op === Instruction.LC) {
-          // 移除LI/LC指令，LEA或IMM指令已经在前面生成了
+          // 回滚加载指令，LEA或IMM指令已经在前面生成了
           this.code.pop();
+        } else {
+          throw new Error(`Line ${this.currentToken.line}: Invalid reference`);
         }
       }
       
@@ -247,7 +249,21 @@ export class CodeGenerator {
       i = this.currentToken.type === TokenType.Inc ? 1 : -1;
       this.nextToken();
       this.parseExpression(0); // Inc precedence
-      // 这里需要实现前置递增/递减的逻辑
+      
+      // 保存变量地址，然后加载变量值（与C版本逻辑一致）
+      if (this.code[this.code.length - 1]?.op === Instruction.LC) {
+        this.code[this.code.length - 1].op = Instruction.PUSH;
+        this.emit(Instruction.LC);
+      } else if (this.code[this.code.length - 1]?.op === Instruction.LI) {
+        this.code[this.code.length - 1].op = Instruction.PUSH;
+        this.emit(Instruction.LI);
+      } else {
+        throw new Error(`Line ${this.currentToken.line}: Invalid Inc or Dec`);
+      }
+      this.emit(Instruction.PUSH); // 保存变量值
+      this.emit(Instruction.IMM, this.currentType === SymbolType.PTR ? 8 : 1);
+      this.emit(i === 1 ? Instruction.ADD : Instruction.SUB); // 计算
+      this.emit(this.currentType === SymbolType.CHAR ? Instruction.SC : Instruction.SI); // 写回变量地址
     }
     else {
       throw new Error(`Line ${this.currentToken.line}: Invalid expression`);
@@ -262,8 +278,8 @@ export class CodeGenerator {
         this.assert(TokenType.Assign);
         if (this.code[this.code.length - 1]?.op === Instruction.LC || 
             this.code[this.code.length - 1]?.op === Instruction.LI) {
-          // 将 LC/LI 指令替换为 PUSH 指令（与 C 版本保持一致）
-          this.code[this.code.length - 1] = { op: Instruction.PUSH };
+          // 将 LC/LI 指令的操作码替换为 PUSH，保留参数（与 C 版本保持一致）
+          this.code[this.code.length - 1].op = Instruction.PUSH;
         } else {
           throw new Error(`Line ${this.currentToken.line}: Invalid assignment`);
         }
@@ -439,10 +455,10 @@ export class CodeGenerator {
       // var++, var--
       else if (this.currentToken.type === TokenType.Inc || this.currentToken.type === TokenType.Dec) {
         if (this.code[this.code.length - 1]?.op === Instruction.LC) {
-          this.code[this.code.length - 1] = { op: Instruction.PUSH };
+          this.code[this.code.length - 1].op = Instruction.PUSH;
           this.emit(Instruction.LC);
         } else if (this.code[this.code.length - 1]?.op === Instruction.LI) {
-          this.code[this.code.length - 1] = { op: Instruction.PUSH };
+          this.code[this.code.length - 1].op = Instruction.PUSH;
           this.emit(Instruction.LI);
         } else {
           throw new Error(`Line ${this.currentToken.line}: Invalid Inc or Dec`);
@@ -740,6 +756,10 @@ export class CodeGenerator {
     this.lexer = new Lexer(this.parser.getSource());
     this.currentToken = this.lexer.nextToken();
     
+    // 使用词法分析器的数据段
+    this.data = this.lexer.getData();
+    this.dataPtr = this.data.length;
+    
     let mainIndex = -1;
 
     // 按照cpc.c的parse()逻辑解析源代码
@@ -815,7 +835,7 @@ export class CodeGenerator {
 
     return {
       code: this.code,
-      data: this.lexer.getData(), // 使用词法分析器的数据段
+      data: this.data,
       mainIndex
     };
   }

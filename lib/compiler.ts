@@ -85,7 +85,7 @@ export class Compiler {
     });
     
     // 数据段内容
-    console.log('Data segment:', data.slice(0, 20), data.length > 20 ? '...' : '');
+    console.log('Data segment:', data);
     console.log('=== End Debug Information ===\n');
   }
 }

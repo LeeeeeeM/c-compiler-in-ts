@@ -227,7 +227,7 @@ export class Lexer {
       
       return {
         type: TokenType.String,
-        value: startIndex, // 返回字符串在数据段中的地址
+        value: startIndex, // 返回字符串在数据段中的索引
         line: startLine,
         column: startColumn
       };
