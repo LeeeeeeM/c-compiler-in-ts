@@ -1,6 +1,7 @@
 import { Lexer } from './lexer';
 import { SymbolTable } from './symbol-table';
-import { Token, TokenType, Symbol, SymbolType, SymbolClass } from './types';
+import { TokenType, SymbolType, SymbolClass } from './types';
+import type { Token } from './types';
 
 export class Parser {
   private lexer: Lexer;

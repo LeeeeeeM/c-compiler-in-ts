@@ -1,4 +1,5 @@
-import { Symbol, SymbolClass, SymbolType, TokenType } from './types';
+import { SymbolClass, SymbolType, TokenType } from './types';
+import type { Symbol } from './types';
 
 export class SymbolTable {
   private symbols: Symbol[] = [];

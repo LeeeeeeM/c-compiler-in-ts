@@ -1,7 +1,7 @@
 import { Parser } from './parser';
 import { CodeGenerator } from './code-generator';
 import { VirtualMachine } from './vm';
-import { CompilerConfig } from './types';
+import type { CompilerConfig } from './types';
 
 // 编译器核心类
 export class Compiler {
@@ -48,6 +48,36 @@ export class Compiler {
     } catch (error) {
       console.error(`Compilation error: ${error}`);
       return -1;
+    }
+  }
+
+  // 编译源代码（不执行）
+  public compileOnly(source: string, filename?: string): { code: any[], data: any[], mainIndex: number } | null {
+    try {
+      if (this.debugMode && filename) {
+        console.log(`Compiling ${filename}...`);
+      }
+      
+      // 语法分析（Parser内部会创建Lexer）
+      const parser = new Parser(source, this.debugMode);
+      parser.parse();
+      
+      // 代码生成
+      const codeGenerator = new CodeGenerator(parser);
+      const { code, data, mainIndex } = codeGenerator.generate();
+      
+      // 生成汇编内容
+      this.assemblyContent = codeGenerator.generateAssembly();
+      
+      // 调试模式输出
+      if (this.debugMode) {
+        this.printDebugInfo(parser, code, data, mainIndex);
+      }
+      
+      return { code, data, mainIndex };
+    } catch (error) {
+      console.error(`Compilation error: ${error}`);
+      return null;
     }
   }
 

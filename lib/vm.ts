@@ -1,4 +1,5 @@
-import { Instruction, InstructionData, VMState } from './types';
+import { Instruction } from './types';
+import type { InstructionData, VMState } from './types';
 
 export class VirtualMachine {
   private state: VMState;
@@ -318,7 +319,12 @@ export class VirtualMachine {
 
   // 获取虚拟机状态
   public getState(): VMState {
-    return { ...this.state };
+    // 返回栈的有效部分（从SP到栈顶）
+    const stackSlice = this.state.stack.slice(this.state.sp, this.maxSize);
+    return { 
+      ...this.state, 
+      stack: stackSlice 
+    };
   }
 
   // 设置虚拟机状态

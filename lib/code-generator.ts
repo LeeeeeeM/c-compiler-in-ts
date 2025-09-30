@@ -1,4 +1,5 @@
-import { Instruction, InstructionData, Symbol, SymbolType, SymbolClass, TokenType, Precedence } from './types';
+import { Instruction, SymbolType, SymbolClass, TokenType, Precedence } from './types';
+import type { InstructionData, Symbol } from './types';
 import { SymbolTable } from './symbol-table';
 import { Parser } from './parser';
 import { Lexer } from './lexer';

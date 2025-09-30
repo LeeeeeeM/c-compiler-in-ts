@@ -1,388 +1,522 @@
-import React, { useState, useCallback } from 'react';
-import { CPCCompiler } from '../lib';
-import type { CompilerResult, ExecutionResult } from '../lib/types';
-import { Play, Square, Bug, FileText } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Square, FileText, RotateCcw, ChevronRight, ChevronDown } from 'lucide-react';
+import { Compiler } from '../lib/compiler';
+import { VirtualMachine } from '../lib/vm';
+import type { InstructionData, VMState } from '../lib/types';
 
-interface EditorProps {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
+// 编译结果接口
+interface CompileResult {
+  success: boolean;
+  code: InstructionData[];
+  data: any[];
+  mainIndex: number;
+  assembly: string;
+  error?: string;
 }
-
-const Editor: React.FC<EditorProps> = ({ value, onChange, placeholder }) => {
-  return (
-    <textarea
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="w-full h-full resize-none bg-gray-900 text-green-400 font-mono text-sm p-4 border-0 outline-none"
-      spellCheck={false}
-    />
-  );
-};
-
-const ExamplePrograms = {
-  'Hello World': `int main() {
-    printf("Hello, World!");
-    return 0;
-}`,
-  'Simple Math': `int main() {
-    int a = 10;
-    int b = 20;
-    int sum = a + b;
-    printf("Sum: %d", sum);
-    return 0;
-}`,
-  'Factorial': `int factorial(int n) {
-    if (n <= 1) {
-        return 1;
-    }
-    return n * factorial(n - 1);
-}
-
-int main() {
-    int result = factorial(5);
-    printf("Factorial of 5 is %d", result);
-    return 0;
-}`,
-  'Fibonacci': `int fibonacci(int n) {
-    if (n <= 1) {
-        return n;
-    }
-    return fibonacci(n - 1) + fibonacci(n - 2);
-}
-
-int main() {
-    int i = 0;
-    while (i < 10) {
-        printf("fibonacci(%d) = %d", i, fibonacci(i));
-        i = i + 1;
-    }
-    return 0;
-}`,
-  'Conditional': `int main() {
-    int x = 15;
-    if (x > 10) {
-        printf("x is greater than 10");
-    } else {
-        printf("x is not greater than 10");
-    }
-    return 0;
-}`,
-  'Loop': `int main() {
-    int i = 0;
-    while (i < 5) {
-        printf("Count: %d", i);
-        i = i + 1;
-    }
-    return 0;
-}`
-};
 
 export default function App() {
-  const [sourceCode, setSourceCode] = useState(ExamplePrograms['Hello World']);
-  const [compilerResult, setCompilerResult] = useState<CompilerResult | null>(null);
-  const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
+  // 状态管理
+  const [sourceCode, setSourceCode] = useState(`int main() {
+    int x;
+    x = 43;
+    printf("x = %d\\n", x);
+    return 0;
+}`);
+  const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
+  const [vmState, setVmState] = useState<VMState | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [showDebugger, setShowDebugger] = useState(false);
-  const [vmState, setVmState] = useState<any>(null);
-  const [selectedExample, setSelectedExample] = useState('Hello World');
-  const [debugMode, setDebugMode] = useState(false);
+  const [vm, setVm] = useState<VirtualMachine | null>(null);
+  const [programFinished, setProgramFinished] = useState(false);
+  const [exitCode, setExitCode] = useState<number | null>(null);
+  const instructionsRef = useRef<HTMLDivElement>(null);
 
-  const compiler = new CPCCompiler();
+  // 将指令数字转换为指令名称
+  const getInstructionName = (op: number): string => {
+    const instructionNames = [
+      'IMM', 'LEA', 'JMP', 'JZ', 'JNZ', 'CALL', 'NVAR', 'DARG', 'RET', 'LI', 'LC', 'SI', 'SC', 'PUSH',
+      'OR', 'XOR', 'AND', 'EQ', 'NE', 'LT', 'GT', 'LE', 'GE', 'SHL', 'SHR', 'ADD', 'SUB', 'MUL', 'DIV', 'MOD',
+      'OPEN', 'READ', 'CLOS', 'PRTF', 'MALC', 'FREE', 'MSET', 'MCMP', 'EXIT'
+    ];
+    return instructionNames[op] || `UNK${op}`;
+  };
 
-  const compileAndRun = useCallback(async () => {
+  // 自动滚动到当前指令
+  const scrollToCurrentInstruction = () => {
+    if (instructionsRef.current && vmState) {
+      const currentIndex = vmState.pc;
+      const instructionElement = instructionsRef.current.children[currentIndex] as HTMLElement;
+      if (instructionElement) {
+        // 获取容器和元素的位置信息
+        const container = instructionsRef.current.parentElement;
+        if (container) {
+          const containerRect = container.getBoundingClientRect();
+          const elementRect = instructionElement.getBoundingClientRect();
+          
+          // 计算元素相对于容器的位置
+          const elementTop = elementRect.top - containerRect.top + container.scrollTop;
+          const elementHeight = elementRect.height;
+          const containerHeight = containerRect.height;
+          
+          // 计算目标滚动位置（元素居中）
+          const targetScrollTop = elementTop - (containerHeight / 2) + (elementHeight / 2);
+          
+          // 平滑滚动
+          container.scrollTo({
+            top: targetScrollTop,
+            behavior: 'smooth'
+          });
+        }
+      }
+    }
+  };
+
+  // 编译器实例
+  const compiler = new Compiler({ debugMode: true });
+
+  // 监听VM状态变化，自动滚动到当前指令
+  useEffect(() => {
+    if (vmState) {
+      // 延迟一点时间确保DOM更新完成
+      setTimeout(scrollToCurrentInstruction, 100);
+    }
+  }, [vmState?.pc]);
+
+  // 编译代码
+  const compileCode = () => {
     try {
-      setIsRunning(true);
-      setExecutionResult(null);
+      // 重置程序状态
+      setProgramFinished(false);
+      setExitCode(null);
       
-      // Compile
-      const compileResult = compiler.compile(sourceCode);
-      setCompilerResult(compileResult);
+      const result = compiler.compileOnly(sourceCode);
+      const assembly = compiler.getAssemblyContent();
       
-      if (!compileResult.success) {
-        setIsRunning(false);
-        return;
+      if (result) {
+        setCompileResult({
+          success: true,
+          code: result.code,
+          data: result.data,
+          mainIndex: result.mainIndex,
+          assembly
+        });
+        
+        // 初始化VM（使用更小的栈大小）
+        const newVm = new VirtualMachine(1024 * 8); // 8KB栈空间
+        newVm.initialize(result.code, result.data, result.mainIndex);
+        setVm(newVm);
+        
+        // 获取初始状态（简化版）
+        setVmState({
+          code: result.code,
+          data: result.data,
+          stack: [],
+          pc: result.mainIndex,
+          sp: 0,
+          bp: 0,
+          ax: 0,
+          cycle: 0
+        });
+      } else {
+        setCompileResult({
+          success: false,
+          code: [],
+          data: [],
+          mainIndex: 0,
+          assembly: '',
+          error: 'Compilation failed'
+        });
       }
       
-      // Execute
-      const execResult = compiler.execute(compileResult.instructions);
-      setExecutionResult(execResult);
-      setVmState(execResult.vmState);
-      
     } catch (error) {
-      setExecutionResult({
+      console.error('Compilation error:', error);
+      setCompileResult({
         success: false,
-        output: '',
+        code: [],
+        data: [],
+        mainIndex: 0,
+        assembly: '',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
+    }
+  };
+
+  // 执行下一步
+  const stepNext = () => {
+    if (!vm || !compileResult?.success || programFinished) return;
+    
+    try {
+      vm.step();
+      const state = vm.getState();
+      setVmState(state);
+      
+      // 检查程序是否结束（与VM.execute()逻辑保持一致）
+      if (state.pc >= compileResult.code.length) {
+        // PC超出代码范围，程序正常结束
+        console.log('Program finished: PC out of bounds', state.pc, 'code length:', compileResult.code.length);
+        setProgramFinished(true);
+        setExitCode(0); // 正常结束返回0
+      } else {
+        // 检查当前指令是否是EXIT
+        const currentInstruction = compileResult.code[state.pc];
+        if (currentInstruction && currentInstruction.op === 38) { // EXIT指令
+          console.log('Program finished: EXIT instruction at PC', state.pc);
+          setProgramFinished(true);
+          setExitCode(state.ax);
+        }
+      }
+    } catch (error) {
+      console.error('Step execution error:', error);
+      setProgramFinished(true);
+    }
+  };
+
+  // 执行到最后
+  const runToEnd = async () => {
+    if (!vm || !compileResult?.success || programFinished) return;
+    
+    setIsRunning(true);
+    try {
+      const exitCode = vm.execute();
+      const state = vm.getState();
+      setVmState(state);
+      setProgramFinished(true);
+      setExitCode(exitCode);
+      console.log('Program finished with exit code:', exitCode);
+    } catch (error) {
+      console.error('Execution error:', error);
+      setProgramFinished(true);
     } finally {
       setIsRunning(false);
     }
-  }, [sourceCode, compiler]);
+  };
 
-  const stepDebug = useCallback(() => {
-    if (!compilerResult?.success) return;
+  // 重置
+  const reset = () => {
+    if (!compileResult?.success) return;
     
-    try {
-      const execResult = compiler.execute(compilerResult.instructions);
-      setExecutionResult(execResult);
-      setVmState(execResult.vmState);
-    } catch (error) {
-      setExecutionResult({
-        success: false,
-        output: '',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  }, [compilerResult, compiler]);
-
-  const resetDebug = useCallback(() => {
-    setExecutionResult(null);
-    setVmState(null);
-  }, []);
-
-  const loadExample = (exampleName: string) => {
-    setSourceCode(ExamplePrograms[exampleName as keyof typeof ExamplePrograms]);
-    setSelectedExample(exampleName);
-    setCompilerResult(null);
-    setExecutionResult(null);
-    resetDebug();
+    const newVm = new VirtualMachine(1024 * 8); // 8KB栈空间
+    newVm.initialize(compileResult.code, compileResult.data, compileResult.mainIndex);
+    setVm(newVm);
+    const state = newVm.getState();
+    setVmState(state);
+    setProgramFinished(false);
+    setExitCode(null);
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <FileText className="h-8 w-8 text-blue-600 mr-3" />
-              <h1 className="text-xl font-semibold text-gray-900">CPC Compiler</h1>
-              <span className="ml-3 text-sm text-gray-500">Browser Edition</span>
+    <div className="h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col">
+      {/* 工具栏 */}
+      <div className="bg-white/80 backdrop-blur-sm shadow-lg border-b border-slate-200 px-4 py-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <FileText className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Interactive C Compiler & Debugger</p>
+              </div>
+            </div>
             </div>
             
-            <div className="flex items-center space-x-4">
-              <select
-                value={selectedExample}
-                onChange={(e) => loadExample(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded-md text-sm"
-              >
-                {Object.keys(ExamplePrograms).map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-              
-              <button
-                onClick={() => {
-                  setShowDebugger(!showDebugger);
-                  setDebugMode(!debugMode);
-                }}
-                className={`p-2 rounded-md ${showDebugger ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Toggle Debugger"
-              >
-                <Bug className="h-5 w-5" />
-              </button>
-              
-              {debugMode && (
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={stepDebug}
-                    disabled={!compilerResult?.success}
-                    className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                  >
-                    Step
-                  </button>
-                  <button
-                    onClick={resetDebug}
-                    className="px-3 py-1 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm"
-                  >
-                    Reset
-                  </button>
+            {/* 程序状态显示 */}
+            <div className="flex items-center gap-2">
+              {programFinished && (
+                <div className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
+                  ✅ 程序执行完成 (退出码: {exitCode})
                 </div>
               )}
+              {isRunning && (
+                <div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">
+                  🔄 程序执行中...
+                </div>
+              )}
+            </div>
+            
+          <div className="flex items-center gap-2">
+              <button
+              onClick={compileCode}
+              className="px-4 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center gap-1.5 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 text-sm"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span className="font-medium">编译</span>
+              </button>
+              
+                  <button
+              onClick={stepNext}
+              disabled={!vm || !compileResult?.success || programFinished}
+              className="px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all duration-200 flex items-center gap-1.5 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 text-sm"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+              <span className="font-medium">下一步</span>
+                  </button>
               
               <button
-                onClick={compileAndRun}
-                disabled={isRunning}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={runToEnd}
+              disabled={!vm || !compileResult?.success || isRunning || programFinished}
+              className="px-4 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all duration-200 flex items-center gap-1.5 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 text-sm"
               >
                 {isRunning ? (
                   <>
-                    <Square className="h-4 w-4 mr-2" />
-                    Running...
+                  <Square className="h-3.5 w-3.5" />
+                  <span className="font-medium">执行中...</span>
                   </>
                 ) : (
                   <>
-                    <Play className="h-4 w-4 mr-2" />
-                    Run
+                  <ChevronDown className="h-3.5 w-3.5" />
+                  <span className="font-medium">执行到最后</span>
                   </>
                 )}
               </button>
-            </div>
+            
+            <button
+              onClick={reset}
+              disabled={!vm}
+              className="px-4 py-1.5 bg-gradient-to-r from-slate-500 to-slate-600 text-white rounded-lg hover:from-slate-600 hover:to-slate-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all duration-200 flex items-center gap-1.5 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 text-sm"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span className="font-medium">重置</span>
+            </button>
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Code Editor */}
-          <div className="bg-white rounded-lg shadow-sm border">
-            <div className="px-4 py-3 border-b bg-gray-50">
-              <h2 className="text-sm font-medium text-gray-900">Source Code</h2>
+      {/* 主内容区域 */}
+      <div className="flex-1 flex overflow-hidden p-4 gap-4">
+        {/* 左侧：代码编辑器 */}
+        <div className="w-1/3 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+          <div className="h-full flex flex-col">
+            <div className="px-4 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+              <div className="flex items-center" style={{ gap: '8px' }}>
+                <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                <h2 className="text-sm font-semibold text-slate-700 ml-3">C 源代码</h2>
+              </div>
             </div>
-            <div className="h-96">
-              <Editor
+            <div className="flex-1 p-4">
+              <textarea
                 value={sourceCode}
-                onChange={setSourceCode}
-                placeholder="Enter your C code here..."
+                onChange={(e) => setSourceCode(e.target.value)}
+                className="w-full h-full resize-none bg-slate-900 text-emerald-400 font-mono text-sm p-6 border-0 outline-none rounded-xl shadow-inner"
+                placeholder="输入C代码..."
+                spellCheck={false}
+                style={{
+                  background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                  color: '#10b981'
+                }}
               />
             </div>
           </div>
-
-          {/* Output Panel */}
-          <div className="space-y-6">
-            {/* Compilation Results */}
-            <div className="bg-white rounded-lg shadow-sm border">
-              <div className="px-4 py-3 border-b bg-gray-50">
-                <h2 className="text-sm font-medium text-gray-900">Compilation</h2>
-              </div>
-              <div className="p-4">
-                {compilerResult ? (
-                  <div className={`text-sm ${compilerResult.success ? 'text-green-600' : 'text-red-600'}`}>
-                    {compilerResult.success ? (
-                      <div>
-                        <div className="font-medium">✓ Compilation successful</div>
-                        <div className="mt-2 text-gray-600">
-                          Generated {compilerResult.instructions.length} instructions
-                        </div>
-                        {compilerResult.instructions.length > 0 && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-blue-600">View Instructions</summary>
-                            <pre className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto max-h-32">
-                              {compilerResult.instructions.map((inst, i) => 
-                                `${i.toString().padStart(3, ' ')}: ${inst.op}${inst.value !== undefined ? ` ${inst.value}` : ''}`
-                              ).join('\n')}
-                            </pre>
-                          </details>
-                        )}
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="font-medium">✗ Compilation failed</div>
-                        <div className="mt-1 text-red-500">{compilerResult.error}</div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-sm text-gray-500">No compilation results yet</div>
-                )}
-              </div>
-            </div>
-
-            {/* Execution Results */}
-            <div className="bg-white rounded-lg shadow-sm border">
-              <div className="px-4 py-3 border-b bg-gray-50">
-                <h2 className="text-sm font-medium text-gray-900">Output</h2>
-              </div>
-              <div className="p-4">
-                {executionResult ? (
-                  <div className={`text-sm ${executionResult.success ? 'text-green-600' : 'text-red-600'}`}>
-                    {executionResult.success ? (
-                      <div>
-                        <div className="font-medium">✓ Execution completed</div>
-                        {executionResult.output && (
-                          <div className="mt-2">
-                            <div className="text-gray-600 mb-1">Output:</div>
-                            <pre className="bg-gray-100 p-2 rounded text-gray-800 font-mono text-xs whitespace-pre-wrap">
-                              {executionResult.output}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="font-medium">✗ Execution failed</div>
-                        <div className="mt-1 text-red-500">{executionResult.error}</div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-sm text-gray-500">No execution results yet</div>
-                )}
-              </div>
-            </div>
-
-            {/* Debugger Panel */}
-            {showDebugger && vmState && (
-              <div className="bg-white rounded-lg shadow-sm border">
-                <div className="px-4 py-3 border-b bg-gray-50">
-                  <h2 className="text-sm font-medium text-gray-900">Debugger</h2>
-                </div>
-                <div className="p-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <div className="font-medium text-gray-700">Registers</div>
-                      <div className="mt-1 space-y-1">
-                        <div>PC: {vmState.pc}</div>
-                        <div>SP: {vmState.sp}</div>
-                        <div>BP: {vmState.bp}</div>
-                        <div>AX: {vmState.ax}</div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-medium text-gray-700">Stack</div>
-                      <div className="mt-1">
-                        <div className="text-xs text-gray-500">
-                          Size: {vmState.stack.length}
-                        </div>
-                        {vmState.stack.length > 0 && (
-                          <div className="mt-1 max-h-20 overflow-auto">
-                            {vmState.stack.slice(-10).map((value: number, i: number) => (
-                              <div key={i} className="text-xs font-mono">
-                                [{vmState.stack.length - 10 + i}]: {value}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Features Info */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="text-lg font-medium text-blue-900 mb-4">Supported C Language Features</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-            <div>
-              <h4 className="font-medium text-blue-800 mb-2">Data Types</h4>
-              <ul className="text-blue-700 space-y-1">
-                <li>• int (64-bit integers)</li>
-                <li>• char (8-bit characters)</li>
-                <li>• void (function return type)</li>
-              </ul>
+        {/* 中间：指令展示 */}
+        <div className="w-1/3 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+          <div className="h-full flex flex-col">
+            <div className="px-4 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center" style={{ gap: '8px' }}>
+                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-indigo-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
+                  <h2 className="text-sm font-semibold text-slate-700 ml-3">编译后的指令</h2>
+                </div>
+                {programFinished && (
+                  <div className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
+                    ✅ 执行完成
+                  </div>
+                )}
+                {isRunning && (
+                  <div className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                    🔄 执行中
+                  </div>
+                )}
+              </div>
             </div>
-            <div>
-              <h4 className="font-medium text-blue-800 mb-2">Control Flow</h4>
-              <ul className="text-blue-700 space-y-1">
-                <li>• if/else statements</li>
-                <li>• while loops</li>
-                <li>• function calls</li>
-                <li>• return statements</li>
-              </ul>
+            <div className="flex-1 p-6 overflow-auto">
+              {compileResult ? (
+                <div ref={instructionsRef} className="space-y-2">
+                  {compileResult.code.map((instruction, index) => {
+                    const isCurrent = vmState && index === vmState.pc;
+                    return (
+                      <div
+                        key={index}
+                        className={`p-3 rounded-xl text-sm font-mono transition-all duration-200 ${
+                          isCurrent 
+                            ? 'bg-gradient-to-r from-yellow-100 to-orange-100 border-l-4 border-yellow-500 shadow-lg transform scale-105' 
+                            : 'hover:bg-slate-50 hover:shadow-md'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                            isCurrent ? 'bg-yellow-200 text-yellow-800' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {index.toString().padStart(3, ' ')}
+                          </span>
+                          <span className="text-blue-600 font-bold text-base">
+                            {getInstructionName(instruction.op)}
+                          </span>
+                          {instruction.arg !== undefined && (
+                            <span className="text-slate-700 font-medium">
+                              {instruction.arg}
+                            </span>
+                          )}
+                          {isCurrent && (
+                            <span className="ml-auto text-yellow-600 font-bold text-xs bg-yellow-100 px-2 py-1 rounded-full">
+                              ← 当前
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <FileText className="h-8 w-8 text-slate-400" />
+                    </div>
+                    <p className="text-slate-500 text-sm">点击"编译"按钮生成指令</p>
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
-              <h4 className="font-medium text-blue-800 mb-2">Operators</h4>
-              <ul className="text-blue-700 space-y-1">
-                <li>• Arithmetic: +, -, *, /, %</li>
-                <li>• Comparison: ==, !=, &lt;, &gt;, &lt;=, &gt;=</li>
-                <li>• Assignment: =</li>
-                <li>• Bitwise: &, |, ^, &lt;&lt;, &gt;&gt;</li>
-              </ul>
+            </div>
+          </div>
+
+        {/* 右侧：状态面板 */}
+        <div className="w-1/3 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+          <div className="h-full flex flex-col">
+            {/* VM状态 */}
+            <div className="border-b border-slate-200">
+              <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-slate-100">
+                <div className="flex items-center" style={{ gap: '8px' }}>
+                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-teal-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-cyan-400 rounded-full"></div>
+                  <h2 className="text-sm font-semibold text-slate-700 ml-3">VM 状态</h2>
+                </div>
+              </div>
+              <div className="p-4">
+                {vmState ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-3 rounded-xl">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-600 text-sm font-medium">PC</span>
+                          <span className="font-mono font-bold text-blue-600 text-lg">{vmState.pc}</span>
+                        </div>
+                      </div>
+                      <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 p-3 rounded-xl">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-600 text-sm font-medium">SP</span>
+                          <span className="font-mono font-bold text-emerald-600 text-lg">{vmState.sp}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-3 rounded-xl">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-600 text-sm font-medium">BP</span>
+                          <span className="font-mono font-bold text-purple-600 text-lg">{vmState.bp}</span>
+                        </div>
+                      </div>
+                      <div className="bg-gradient-to-r from-orange-50 to-orange-100 p-3 rounded-xl">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-600 text-sm font-medium">AX</span>
+                          <span className="font-mono font-bold text-orange-600 text-lg">{vmState.ax}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <div className="w-6 h-6 bg-slate-300 rounded-full"></div>
+                    </div>
+                    <p className="text-slate-500 text-sm">VM未初始化</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 数据段 */}
+            <div className="border-b border-slate-200 flex-1">
+              <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-slate-100">
+                <div className="flex items-center" style={{ gap: '8px' }}>
+                  <div className="w-2 h-2 bg-rose-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-pink-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-fuchsia-400 rounded-full"></div>
+                  <h2 className="text-sm font-semibold text-slate-700 ml-3">数据段</h2>
+                </div>
+              </div>
+              <div className="p-6 overflow-auto max-h-48">
+                {vmState ? (
+                  <div className="space-y-2">
+                    {vmState.data.map((value: number, index: number) => (
+                      <div key={index} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+                        <span className="text-slate-500 text-xs font-mono">[{index}]:</span>
+                        <span className="text-slate-800 font-mono font-medium">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <div className="w-4 h-4 bg-slate-300 rounded"></div>
+                    </div>
+                    <p className="text-slate-500 text-xs">数据段未初始化</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 栈状态 */}
+            <div className="flex-1">
+            <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-slate-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center" style={{ gap: '8px' }}>
+                  <div className="w-2 h-2 bg-violet-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-indigo-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                  <h2 className="text-sm font-semibold text-slate-700 ml-3">栈状态</h2>
+                </div>
+                {vmState && (
+                  <div className="text-xs text-slate-500 font-mono">
+                    SP: {vmState.sp}, 栈大小: {vmState.stack.length}
+                  </div>
+                )}
+              </div>
+                      </div>
+              <div className="p-6 overflow-auto max-h-48">
+                {vmState ? (
+                  <div className="space-y-2">
+                    {vmState.stack.length > 0 ? (
+                      vmState.stack.map((value: number, index: number) => {
+                        const address = vmState.sp + index;
+                        return (
+                          <div key={index} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+                            <span className="text-slate-500 text-xs font-mono">[{address}]:</span>
+                            <span className="text-slate-800 font-mono font-medium">{value}</span>
+                          </div>
+                        );
+                      }).reverse() // 反转数组，高地址在上方
+                    ) : (
+                      <div className="text-center py-4">
+                        <p className="text-slate-500 text-xs">栈为空</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <div className="w-4 h-4 bg-slate-300 rounded"></div>
+                    </div>
+                    <p className="text-slate-500 text-xs">栈未初始化</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
