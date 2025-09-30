@@ -16,12 +16,51 @@ interface CompileResult {
 
 export default function App() {
   // 状态管理
-  const [sourceCode, setSourceCode] = useState(`int main() {
-    int x;
-    x = 43;
-    printf("x = %d\\n", x);
+  const [sourceCode, setSourceCode] = useState(`// 多层变量遮蔽示例
+int a1;
+int a3;
+
+int test_func(int a1) {  // 参数遮蔽全局变量
+    int a2;
+
+    int a3;
+
+    a3 = 40;
+    
+    a2 = a1 + 1;
+    
+    {
+      a1 = 20;
+      a2 = a1 + 1;
+      printf("inner: a1=%d, a2=%d, a3=%d\n", a1, a2, a3);
+      {
+        a1 = 30;
+        a2 = a1 + 1;
+        printf("inner: a1=%d, a2=%d, a3=%d\n", a1, a2, a3);
+      }
+    }
+    printf("outer: a1=%d, a2=%d, a3=%d\n", a1, a2, a3);
+    
+    return a2;
+}
+
+int main() {
+    int a1;  // 局部变量遮蔽全局变量
+
+    int result1;
+    
+    a1 = 10;
+    
+    printf("main: a1=%d\n", a1);
+    
+    result1 = test_func(5);
+    
+    printf("Results: result1=%d\n", result1);
+    printf("a1=%d\n", a1);
+    
     return 0;
-}`);
+}
+`);
   const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
   const [vmState, setVmState] = useState<VMState | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -29,6 +68,7 @@ export default function App() {
   const [programFinished, setProgramFinished] = useState(false);
   const [exitCode, setExitCode] = useState<number | null>(null);
   const instructionsRef = useRef<HTMLDivElement>(null);
+  const stackRef = useRef<HTMLDivElement>(null);
 
   // 将指令数字转换为指令名称
   const getInstructionName = (op: number): string => {
@@ -70,16 +110,32 @@ export default function App() {
     }
   };
 
+  // 自动滚动栈状态到底部
+  const scrollStackToBottom = () => {
+    if (stackRef.current) {
+      const container = stackRef.current.parentElement;
+      if (container) {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    }
+  };
+
   // 编译器实例
   const compiler = new Compiler({ debugMode: true });
 
-  // 监听VM状态变化，自动滚动到当前指令
+  // 监听VM状态变化，自动滚动到当前指令和栈底部
   useEffect(() => {
     if (vmState) {
       // 延迟一点时间确保DOM更新完成
-      setTimeout(scrollToCurrentInstruction, 100);
+      setTimeout(() => {
+        scrollToCurrentInstruction();
+        scrollStackToBottom();
+      }, 100);
     }
-  }, [vmState?.pc]);
+  }, [vmState?.pc, vmState?.stack]);
 
   // 编译代码
   const compileCode = () => {
@@ -110,7 +166,7 @@ export default function App() {
           code: result.code,
           data: result.data,
           stack: [],
-          pc: result.mainIndex,
+          pc: -1,
           sp: 0,
           bp: 0,
           ax: 0,
@@ -145,6 +201,14 @@ export default function App() {
     if (!vm || !compileResult?.success || programFinished) return;
     
     try {
+      // 如果PC为-1，说明程序还没有开始执行，先跳转到main函数
+      if (vmState?.pc === -1) {
+        vm.initialize(compileResult.code, compileResult.data, compileResult.mainIndex);
+        const initialState = vm.getState();
+        setVmState(initialState);
+        return;
+      }
+      
       vm.step();
       const state = vm.getState();
       setVmState(state);
@@ -155,6 +219,8 @@ export default function App() {
         console.log('Program finished: PC out of bounds', state.pc, 'code length:', compileResult.code.length);
         setProgramFinished(true);
         setExitCode(0); // 正常结束返回0
+        // 程序结束后重置PC为-1
+        setVmState(prev => prev ? { ...prev, pc: -1 } : null);
       } else {
         // 检查当前指令是否是EXIT
         const currentInstruction = compileResult.code[state.pc];
@@ -162,11 +228,15 @@ export default function App() {
           console.log('Program finished: EXIT instruction at PC', state.pc);
           setProgramFinished(true);
           setExitCode(state.ax);
+          // 保存EXIT指令执行时的栈状态，然后重置PC为-1
+          setVmState(prev => prev ? { ...state, pc: -1 } : null);
         }
       }
     } catch (error) {
       console.error('Step execution error:', error);
       setProgramFinished(true);
+      // 出错时也重置PC为-1
+      setVmState(prev => prev ? { ...prev, pc: -1 } : null);
     }
   };
 
@@ -176,15 +246,23 @@ export default function App() {
     
     setIsRunning(true);
     try {
+      // 如果PC为-1，说明程序还没有开始执行，先跳转到main函数
+      if (vmState?.pc === -1) {
+        vm.initialize(compileResult.code, compileResult.data, compileResult.mainIndex);
+      }
+      
       const exitCode = vm.execute();
       const state = vm.getState();
-      setVmState(state);
       setProgramFinished(true);
       setExitCode(exitCode);
+      // 保存程序结束时的栈状态，然后重置PC为-1
+      setVmState({ ...state, pc: -1 });
       console.log('Program finished with exit code:', exitCode);
     } catch (error) {
       console.error('Execution error:', error);
       setProgramFinished(true);
+      // 出错时也重置PC为-1
+      setVmState(prev => prev ? { ...prev, pc: -1 } : null);
     } finally {
       setIsRunning(false);
     }
@@ -195,10 +273,19 @@ export default function App() {
     if (!compileResult?.success) return;
     
     const newVm = new VirtualMachine(1024 * 8); // 8KB栈空间
-    newVm.initialize(compileResult.code, compileResult.data, compileResult.mainIndex);
+    // 不调用initialize，保持PC为-1
     setVm(newVm);
-    const state = newVm.getState();
-    setVmState(state);
+    // 重置VM状态，PC设置为-1
+    setVmState({
+      code: compileResult.code,
+      data: compileResult.data,
+      stack: [],
+      pc: -1,
+      sp: 0,
+      bp: 0,
+      ax: 0,
+      cycle: 0
+    });
     setProgramFinished(false);
     setExitCode(null);
   };
@@ -454,12 +541,20 @@ export default function App() {
               <div className="p-6 overflow-auto max-h-48">
                 {vmState ? (
                   <div className="space-y-2">
-                    {vmState.data.map((value: number, index: number) => (
-                      <div key={index} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
-                        <span className="text-slate-500 text-xs font-mono">[{index}]:</span>
-                        <span className="text-slate-800 font-mono font-medium">{value}</span>
+                    {vmState.data.length > 0 ? (
+                      vmState.data.map((value: number, index: number) => (
+                        <div key={index} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+                          <span className="text-slate-500 text-xs font-mono">[{index}]:</span>
+                          <span className="text-slate-800 font-mono font-medium">
+                            {typeof value === 'number' ? value : JSON.stringify(value)}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-4">
+                        <p className="text-slate-500 text-xs">数据段为空</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-6">
@@ -491,9 +586,10 @@ export default function App() {
                       </div>
               <div className="p-6 overflow-auto max-h-48">
                 {vmState ? (
-                  <div className="space-y-2">
+                  <div ref={stackRef} className="space-y-2">
                     {vmState.stack.length > 0 ? (
                       vmState.stack.map((value: number, index: number) => {
+                        // stack[0] 对应地址 sp，stack[n] 对应地址 sp + n
                         const address = vmState.sp + index;
                         return (
                           <div key={index} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
