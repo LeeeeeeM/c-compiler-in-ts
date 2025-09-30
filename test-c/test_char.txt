@@ -1,0 +1,16 @@
+// char 类型测试
+char c1;
+char c2;
+
+int main() {
+    char local_char;
+    
+    c1 = 'A';
+    c2 = 'B';
+    local_char = 'C';
+    
+    printf("Global char: c1=%c, c2=%c\n", c1, c2);
+    printf("Local char: local_char=%c\n", local_char);
+    
+    return 0;
+}

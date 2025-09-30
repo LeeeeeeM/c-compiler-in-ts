@@ -1,0 +1,13 @@
+// 简单 if else 测试
+int main() {
+    int x;
+    x = 10;
+    
+    if (x > 5) {
+        printf("x > 5 is true\n");
+    } else {
+        printf("x > 5 is false\n");
+    }
+    
+    return 0;
+}

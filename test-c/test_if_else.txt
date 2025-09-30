@@ -1,0 +1,42 @@
+// if else 条件语句测试
+int main() {
+    int x;
+    int y;
+    int result;
+    
+    x = 10;
+    y = 20;
+    result = 0;
+    
+    // 测试 if 语句
+    if (x < y) {
+        result = 1;
+        printf("x < y is true, result = %d\n", result);
+    }
+    
+    // 测试 if-else 语句
+    if (x > y) {
+        result = 2;
+        printf("x > y is true, result = %d\n", result);
+    } else {
+        result = 3;
+        printf("x > y is false, result = %d\n", result);
+    }
+    
+    // 测试嵌套 if-else
+    if (x == 10) {
+        if (y == 20) {
+            result = 4;
+            printf("x == 10 and y == 20, result = %d\n", result);
+        } else {
+            result = 5;
+            printf("x == 10 but y != 20, result = %d\n", result);
+        }
+    } else {
+        result = 6;
+        printf("x != 10, result = %d\n", result);
+    }
+    
+    printf("Final result = %d\n", result);
+    return 0;
+}

@@ -1,0 +1,9 @@
+// 简单测试，不包含 if 语句
+int main() {
+    int x;
+    x = 10;
+    
+    printf("x = %d\n", x);
+    
+    return 0;
+}

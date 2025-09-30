@@ -1,0 +1,44 @@
+// 指针测试示例
+int global_int;
+int *p;
+int **pp;
+
+int main() {
+    int local_int;
+    int *local_p;
+    
+    // 初始化值
+    global_int = 100;
+    local_int = 200;
+    
+    // 指针赋值
+    p = &global_int;        // p 指向 global_int
+    local_p = &local_int;    // local_p 指向 local_int
+    pp = &p;                 // pp 指向 p
+    
+    printf("Direct values:\n");
+    printf("global_int = %d\n", global_int);
+    printf("local_int = %d\n", local_int);
+    
+    printf("\nPointer dereference:\n");
+    printf("*p = %d\n", *p);
+    printf("*local_p = %d\n", *local_p);
+    printf("**pp = %d\n", **pp);
+    
+    printf("\nPointer addresses:\n");
+    printf("p = %d\n", p);
+    printf("local_p = %d\n", local_p);
+    printf("pp = %d\n", pp);
+    
+    // 通过指针修改值
+    *p = 300;
+    *local_p = 400;
+    
+    printf("\nAfter modification through pointers:\n");
+    printf("global_int = %d\n", global_int);
+    printf("local_int = %d\n", local_int);
+    printf("*p = %d\n", *p);
+    printf("*local_p = %d\n", *local_p);
+    
+    return 0;
+}

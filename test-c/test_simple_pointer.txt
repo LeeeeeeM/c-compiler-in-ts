@@ -1,0 +1,20 @@
+// 简单指针测试
+int x;
+int *p;
+
+int main() {
+    x = 42;
+    p = &x;
+    
+    printf("x = %d\n", x);
+    printf("&x = %d\n", &x);
+    printf("p = %d\n", p);
+    printf("*p = %d\n", *p);
+    
+    *p = 100;
+    printf("After *p = 100:\n");
+    printf("x = %d\n", x);
+    printf("*p = %d\n", *p);
+    
+    return 0;
+}

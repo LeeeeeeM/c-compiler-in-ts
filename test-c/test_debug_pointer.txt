@@ -1,0 +1,9 @@
+// 最简单的指针测试
+int x;
+
+int main() {
+    x = 42;
+    printf("x = %d\n", x);
+    printf("&x = %d\n", &x);
+    return 0;
+}
