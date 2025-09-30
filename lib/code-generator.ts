@@ -2,7 +2,6 @@ import { Instruction, InstructionData, Symbol, SymbolType, SymbolClass, TokenTyp
 import { SymbolTable } from './symbol-table';
 import { Parser } from './parser';
 import { Lexer } from './lexer';
-import * as fs from 'fs';
 
 export class CodeGenerator {
   private code: InstructionData[] = [];
@@ -974,8 +973,8 @@ export class CodeGenerator {
     };
   }
 
-  // 写入汇编文件
-  public writeAssembly(filename: string): void {
+  // 生成汇编内容
+  public generateAssembly(): string {
     // 指令码到名称的映射
     const instructionNames = [
       'IMM', 'LEA', 'JMP', 'JZ', 'JNZ', 'CALL', 'NVAR', 'DARG', 'RET', 'LI', 'LC', 'SI', 'SC', 'PUSH',
@@ -1000,6 +999,6 @@ export class CodeGenerator {
       content += '\n';
     }
     
-    fs.writeFileSync(filename, content);
+    return content;
   }
 }

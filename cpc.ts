@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import * as fs from 'fs';
 import { Compiler } from './lib/compiler';
 
 // 主编译器类
@@ -12,7 +13,24 @@ class CPCCompiler {
 
   // 编译源文件
   public compile(filename: string): number {
-    return this.compiler.compile(filename);
+    try {
+      // 读取源文件
+      const source = fs.readFileSync(filename, 'utf-8');
+      
+      // 编译源代码
+      const exitCode = this.compiler.compile(source, filename);
+      
+      // 生成汇编文件
+      const assemblyContent = this.compiler.getAssemblyContent();
+      if (assemblyContent) {
+        fs.writeFileSync('assemble.txt', assemblyContent);
+      }
+      
+      return exitCode;
+    } catch (error) {
+      console.error(`Could not open source code(${filename})`);
+      return -1;
+    }
   }
 
   // 主函数

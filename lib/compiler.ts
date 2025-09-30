@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import { Parser } from './parser';
 import { CodeGenerator } from './code-generator';
 import { VirtualMachine } from './vm';
@@ -8,31 +7,19 @@ import { CompilerConfig } from './types';
 export class Compiler {
   private maxSize: number = 128 * 1024 * 8; // 1MB
   private debugMode: boolean = false;
+  private assemblyContent: string = '';
 
   constructor(config?: CompilerConfig) {
     if (config?.maxSize !== undefined) this.maxSize = config.maxSize;
     if (config?.debugMode !== undefined) this.debugMode = config.debugMode;
   }
 
-  // 加载源文件
-  public loadSource(filename: string): string {
+  // 编译源代码
+  public compile(source: string, filename?: string): number {
     try {
-      return fs.readFileSync(filename, 'utf-8');
-    } catch (error) {
-      console.error(`Could not open source code(${filename})`);
-      process.exit(-1);
-    }
-  }
-
-  // 编译源文件
-  public compile(filename: string): number {
-    try {
-      if (this.debugMode) {
+      if (this.debugMode && filename) {
         console.log(`Compiling ${filename}...`);
       }
-      
-      // 加载源文件
-      const source = this.loadSource(filename);
       
       // 语法分析（Parser内部会创建Lexer）
       const parser = new Parser(source, this.debugMode);
@@ -42,8 +29,8 @@ export class Compiler {
       const codeGenerator = new CodeGenerator(parser);
       const { code, data, mainIndex } = codeGenerator.generate();
       
-      // 写入汇编文件
-      codeGenerator.writeAssembly('assemble.txt');
+      // 生成汇编内容
+      this.assemblyContent = codeGenerator.generateAssembly();
       
       // 调试模式输出
       if (this.debugMode) {
@@ -78,5 +65,10 @@ export class Compiler {
     // 数据段内容
     console.log('Data segment:', data);
     console.log('=== End Debug Information ===\n');
+  }
+
+  // 获取汇编内容
+  public getAssemblyContent(): string {
+    return this.assemblyContent;
   }
 }
