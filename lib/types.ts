@@ -176,6 +176,8 @@ export interface Symbol {
   gClass?: SymbolClass;  // 全局类别(用于遮蔽)
   gType?: SymbolType;    // 全局类型
   gValue?: any;          // 全局值
+  arraySize?: number;    // 数组大小
+  isArray?: boolean;     // 是否为数组
 }
 
 // 指令接口

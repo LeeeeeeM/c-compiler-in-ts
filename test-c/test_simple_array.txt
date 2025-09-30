@@ -1,13 +1,20 @@
-// 简单数组访问测试
+// 简单数组测试
 int main() {
-    int x;
-    int *p;
+    int arr[3];
     
-    x = 42;
-    p = &x;
+    // 初始化数组
+    arr[0] = 10;
+    arr[1] = 20;
+    arr[2] = 30;
     
-    printf("x = %d\n", x);
-    printf("p[0] = %d\n", p[0]);
+    // 打印数组元素
+    printf("arr[0] = %d\n", arr[0]);
+    printf("arr[1] = %d\n", arr[1]);
+    printf("arr[2] = %d\n", arr[2]);
+    
+    // 修改数组元素
+    arr[1] = 99;
+    printf("After modification: arr[1] = %d\n", arr[1]);
     
     return 0;
 }

@@ -74,11 +74,6 @@ export class Compiler {
     // 符号表
     const symbols = parser.getSymbolTable().getAllSymbols();
     console.log(`Total symbols: ${symbols.length}`);
-    symbols.forEach((symbol, index) => {
-      if (symbol.name === 'x') {
-        console.log(`Symbol ${index}: ${symbol.name} (class=${symbol.class}, type=${symbol.type}, value=${symbol.value})`);
-      }
-    });
     
     // 数据段内容
     console.log('Data segment:', data);

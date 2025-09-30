@@ -104,6 +104,10 @@ export class CodeGenerator {
       
       tmpPtr = this.symbolTable.lookupSymbol(name);
       
+      if (!tmpPtr) {
+        throw new Error(`Line ${this.currentToken.line}: Symbol ${name} not found`);
+      }
+      
       // 函数调用
       if (this.currentToken.type === TokenType.LeftParen) {
         this.assert(TokenType.LeftParen);
@@ -119,12 +123,12 @@ export class CodeGenerator {
         }
         this.assert(TokenType.RightParen);
         
-        if (tmpPtr!.class === SymbolClass.Sys) {
+        if (tmpPtr.class === SymbolClass.Sys) {
           // 系统调用 - 直接发射指令码
-          this.emit(tmpPtr!.value as Instruction);
-        } else if (tmpPtr!.class === SymbolClass.Fun) {
+          this.emit(tmpPtr.value as Instruction);
+        } else if (tmpPtr.class === SymbolClass.Fun) {
           // 函数调用
-          this.emit(Instruction.CALL, tmpPtr!.value);
+          this.emit(Instruction.CALL, tmpPtr.value);
         } else {
           throw new Error(`Line ${this.currentToken.line}: Invalid function call`);
         }
@@ -134,26 +138,34 @@ export class CodeGenerator {
           this.emit(Instruction.DARG, i);
         }
         
-        this.currentType = tmpPtr!.type;
+        this.currentType = tmpPtr.type;
       }
       // 处理枚举值
-      else if (tmpPtr!.class === SymbolClass.Num) {
-        this.emit(Instruction.IMM, tmpPtr!.value);
+      else if (tmpPtr.class === SymbolClass.Num) {
+        this.emit(Instruction.IMM, tmpPtr.value);
         this.currentType = SymbolType.INT;
       }
       // 处理变量
       else {
-        if (tmpPtr!.class === SymbolClass.Loc) {
+        if (tmpPtr.class === SymbolClass.Loc) {
           // 局部变量
-          this.emit(Instruction.LEA, this.ibp - tmpPtr!.value);
-        } else if (tmpPtr!.class === SymbolClass.Glo) {
+          this.emit(Instruction.LEA, this.ibp - tmpPtr.value);
+        } else if (tmpPtr.class === SymbolClass.Glo) {
           // 全局变量
-          this.emit(Instruction.IMM, tmpPtr!.value);
+          this.emit(Instruction.IMM, tmpPtr.value);
         } else {
           throw new Error(`Line ${this.currentToken.line}: Invalid variable`);
         }
-        this.currentType = tmpPtr!.type;
-        this.emit(this.currentType === SymbolType.CHAR ? Instruction.LC : Instruction.LI);
+        
+        // 如果是数组，需要特殊处理
+        if (tmpPtr.isArray && tmpPtr.arraySize) {
+          // 数组变量名代表数组的基地址，不需要加载值
+          this.currentType = SymbolType.PTR; // 数组名是指针类型
+        } else {
+          // 普通变量，加载值
+          this.currentType = tmpPtr.type;
+          this.emit(this.currentType === SymbolType.CHAR ? Instruction.LC : Instruction.LI);
+        }
       }
     }
     // 类型转换或括号
@@ -479,7 +491,7 @@ export class CodeGenerator {
         this.parseExpression(Precedence.Assign); // Assign precedence
         this.assert(TokenType.RightBracket);
         
-        // 检查类型是否支持索引操作（与C版本逻辑一致）
+        // 检查类型是否支持索引操作
         if (tmpType === SymbolType.PTR) {
           this.emit(Instruction.PUSH);
           this.emit(Instruction.IMM, 8);
@@ -604,6 +616,21 @@ export class CodeGenerator {
         const name = this.currentToken.value;
         this.assert(TokenType.Id);
         
+        // 检查是否是数组声明
+        let arraySize = 0;
+        let isArray = false;
+        if (this.currentToken.type === TokenType.LeftBracket) {
+          this.assert(TokenType.LeftBracket);
+          if (this.currentToken.type === TokenType.Num) {
+            arraySize = this.currentToken.value;
+            this.assert(TokenType.Num);
+          } else {
+            throw new Error(`Line ${this.currentToken.line}: Array size must be a number`);
+          }
+          this.assert(TokenType.RightBracket);
+          isArray = true;
+        }
+        
         // 检查是否是新的局部变量
         let symbol = this.symbolTable.lookupSymbol(name);
         if (!symbol) {
@@ -616,6 +643,12 @@ export class CodeGenerator {
           symbol.class = SymbolClass.Loc;
           symbol.type = finalType;
           symbol.value = 0;
+        }
+        
+        // 设置数组信息
+        if (isArray) {
+          symbol.isArray = true;
+          symbol.arraySize = arraySize;
         }
         
         if (this.currentToken.type === TokenType.Comma) {
@@ -715,6 +748,21 @@ export class CodeGenerator {
         const name = this.currentToken.value;
         this.assert(TokenType.Id);
         
+        // 检查是否是数组声明
+        let arraySize = 0;
+        let isArray = false;
+        if (this.currentToken.type === TokenType.LeftBracket) {
+          this.assert(TokenType.LeftBracket);
+          if (this.currentToken.type === TokenType.Num) {
+            arraySize = this.currentToken.value;
+            this.assert(TokenType.Num);
+          } else {
+            throw new Error(`Line ${this.currentToken.line}: Array size must be a number`);
+          }
+          this.assert(TokenType.RightBracket);
+          isArray = true;
+        }
+        
         // 检查是否是新的局部变量
         let symbol = this.symbolTable.lookupSymbol(name);
         if (!symbol) {
@@ -727,6 +775,12 @@ export class CodeGenerator {
           symbol.class = SymbolClass.Loc;
           symbol.type = finalType;
           symbol.value = ++i;
+        }
+        
+        // 设置数组信息
+        if (isArray) {
+          symbol.isArray = true;
+          symbol.arraySize = arraySize;
         }
         
         if (this.currentToken.type === TokenType.Comma) {
@@ -770,11 +824,26 @@ export class CodeGenerator {
   // 生成全局变量代码
   public generateGlobalVariable(symbol: Symbol): void {
     symbol.value = this.dataPtr;
-    // 为全局变量分配空间
-    for (let i = 0; i < 8; i++) { // 64位对齐
-      this.data.push(0);
+    
+    if (symbol.isArray && symbol.arraySize) {
+      // 为数组分配空间
+      const elementSize = this.symbolTable.getTypeSize(symbol.type);
+      const totalSize = symbol.arraySize * elementSize;
+      
+      // 8字节对齐
+      const alignedSize = Math.ceil(totalSize / 8) * 8;
+      
+      for (let i = 0; i < alignedSize; i++) {
+        this.data.push(0);
+      }
+      this.dataPtr += alignedSize;
+    } else {
+      // 为普通变量分配空间
+      for (let i = 0; i < 8; i++) { // 64位对齐
+        this.data.push(0);
+      }
+      this.dataPtr += 8;
     }
-    this.dataPtr += 8;
   }
 
   // 生成字符串数据
@@ -834,11 +903,32 @@ export class CodeGenerator {
           const name = this.currentToken.value;
           this.assert(TokenType.Id);
           
+          // 检查是否是数组声明
+          let arraySize = 0;
+          let isArray = false;
+          if (this.currentToken.type === TokenType.LeftBracket) {
+            this.assert(TokenType.LeftBracket);
+            if (this.currentToken.type === TokenType.Num) {
+              arraySize = this.currentToken.value;
+              this.assert(TokenType.Num);
+            } else {
+              throw new Error(`Line ${this.currentToken.line}: Array size must be a number`);
+            }
+            this.assert(TokenType.RightBracket);
+            isArray = true;
+          }
+          
           const symbol = this.symbolTable.lookupSymbol(name);
           if (!symbol) {
             throw new Error(`Symbol ${name} not found in symbol table`);
           }
           symbol.type = type;
+          
+          // 设置数组信息
+          if (isArray) {
+            symbol.isArray = true;
+            symbol.arraySize = arraySize;
+          }
           
           if (this.currentToken.type === TokenType.LeftParen) {
             // 函数

@@ -1,0 +1,24 @@
+// 九九乘法表
+int main() {
+    int i, j, result;
+    
+    printf("九九乘法表:\n");
+    printf("===========\n");
+    
+    i = 1;
+    while (i <= 9) {
+        j = 1;
+        while (j <= i) {
+            result = i * j;
+            printf("%d*%d=%d  ", i, j, result);
+            j = j + 1;
+        }
+        printf("\n");
+        i = i + 1;
+    }
+    
+    printf("===========\n");
+    printf("九九乘法表完成!\n");
+    
+    return 0;
+}

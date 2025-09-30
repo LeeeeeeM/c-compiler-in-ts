@@ -1,128 +1,84 @@
-(0) NVAR     4
-(1) LEA      -1
+(0) NVAR     3
+(1) IMM      0
 (2) PUSH    
-(3) IMM      10
-(4) SI      
-(5) LEA      -2
+(3) PRTF    
+(4) DARG     1
+(5) IMM      16
 (6) PUSH    
-(7) IMM      20
-(8) SI      
-(9) LEA      -3
+(7) PRTF    
+(8) DARG     1
+(9) LEA      -1
 (10) PUSH    
-(11) IMM      30
+(11) IMM      1
 (12) SI      
-(13) IMM      0
-(14) PUSH    
-(15) LEA      -1
-(16) LI      
-(17) PUSH    
-(18) LEA      -2
-(19) LI      
+(13) LEA      -1
+(14) LI      
+(15) PUSH    
+(16) IMM      9
+(17) LE      
+(18) JZ       74
+(19) LEA      -2
 (20) PUSH    
-(21) LEA      -3
-(22) LI      
-(23) PUSH    
-(24) PRTF    
-(25) DARG     4
-(26) LEA      -4
-(27) PUSH    
-(28) LEA      -1
-(29) SI      
-(30) IMM      48
+(21) IMM      1
+(22) SI      
+(23) LEA      -2
+(24) LI      
+(25) PUSH    
+(26) LEA      -1
+(27) LI      
+(28) LE      
+(29) JZ       61
+(30) LEA      -3
 (31) PUSH    
-(32) LEA      -4
+(32) LEA      -1
 (33) LI      
 (34) PUSH    
-(35) IMM      0
-(36) PUSH    
-(37) IMM      8
-(38) MUL     
-(39) ADD     
-(40) LI      
-(41) PUSH    
-(42) PRTF    
-(43) DARG     2
-(44) LEA      -4
-(45) PUSH    
-(46) LEA      -2
-(47) SI      
-(48) IMM      72
+(35) LEA      -2
+(36) LI      
+(37) MUL     
+(38) SI      
+(39) IMM      40
+(40) PUSH    
+(41) LEA      -1
+(42) LI      
+(43) PUSH    
+(44) LEA      -2
+(45) LI      
+(46) PUSH    
+(47) LEA      -3
+(48) LI      
 (49) PUSH    
-(50) LEA      -4
-(51) LI      
-(52) PUSH    
-(53) IMM      0
-(54) PUSH    
-(55) IMM      8
-(56) MUL     
-(57) ADD     
-(58) LI      
-(59) PUSH    
-(60) PRTF    
-(61) DARG     2
-(62) LEA      -4
-(63) PUSH    
-(64) LEA      -3
-(65) SI      
-(66) IMM      96
-(67) PUSH    
-(68) LEA      -4
-(69) LI      
-(70) PUSH    
-(71) IMM      0
-(72) PUSH    
-(73) IMM      8
-(74) MUL     
-(75) ADD     
-(76) LI      
-(77) PUSH    
-(78) PRTF    
-(79) DARG     2
-(80) LEA      -4
-(81) PUSH    
-(82) LEA      -1
-(83) SI      
-(84) IMM      120
-(85) PUSH    
-(86) LEA      -4
-(87) LI      
-(88) PUSH    
-(89) IMM      0
-(90) PUSH    
-(91) IMM      8
-(92) MUL     
-(93) ADD     
-(94) LI      
-(95) PUSH    
-(96) PRTF    
-(97) DARG     2
-(98) IMM      144
-(99) PUSH    
-(100) LEA      -4
-(101) LI      
-(102) PUSH    
-(103) IMM      1
-(104) PUSH    
-(105) IMM      8
-(106) MUL     
-(107) ADD     
-(108) LI      
-(109) PUSH    
-(110) PRTF    
-(111) DARG     2
-(112) IMM      168
-(113) PUSH    
-(114) LEA      -4
-(115) LI      
-(116) PUSH    
-(117) IMM      2
-(118) PUSH    
-(119) IMM      8
-(120) MUL     
-(121) ADD     
-(122) LI      
-(123) PUSH    
-(124) PRTF    
-(125) DARG     2
-(126) IMM      0
-(127) RET     
+(50) PRTF    
+(51) DARG     4
+(52) LEA      -2
+(53) PUSH    
+(54) LEA      -2
+(55) LI      
+(56) PUSH    
+(57) IMM      1
+(58) ADD     
+(59) SI      
+(60) JMP      23
+(61) IMM      64
+(62) PUSH    
+(63) PRTF    
+(64) DARG     1
+(65) LEA      -1
+(66) PUSH    
+(67) LEA      -1
+(68) LI      
+(69) PUSH    
+(70) IMM      1
+(71) ADD     
+(72) SI      
+(73) JMP      13
+(74) IMM      80
+(75) PUSH    
+(76) PRTF    
+(77) DARG     1
+(78) IMM      104
+(79) PUSH    
+(80) PRTF    
+(81) DARG     1
+(82) IMM      0
+(83) RET     

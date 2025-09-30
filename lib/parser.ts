@@ -230,8 +230,32 @@ export class Parser {
         const name = this.currentToken.value;
         this.assert(TokenType.Id);
         
+        // 检查是否是数组声明
+        let arraySize = 0;
+        let isArray = false;
+        if (this.currentToken.type === TokenType.LeftBracket) {
+          this.assert(TokenType.LeftBracket);
+          // 检查下一个token是否为数字
+          const nextToken = this.currentToken;
+          if (nextToken.type === TokenType.Num) {
+            arraySize = nextToken.value;
+            this.assert(TokenType.Num);
+          } else {
+            throw new Error(`Line ${nextToken.line}: Array size must be a number`);
+          }
+          this.assert(TokenType.RightBracket);
+          isArray = true;
+        }
+        
         // 添加新的局部符号
         this.symbolTable.addSymbol(name, TokenType.Id, SymbolClass.Loc, finalType, 0);
+        const symbol = this.symbolTable.getCurrentSymbolOrThrow();
+        
+        // 设置数组信息
+        if (isArray) {
+          symbol.isArray = true;
+          symbol.arraySize = arraySize;
+        }
         
         if (this.currentToken.type === TokenType.Comma) {
           this.assert(TokenType.Comma);
@@ -260,8 +284,31 @@ export class Parser {
       const name = this.currentToken.value;
       this.assert(TokenType.Id);
       
+      // 检查是否是数组声明
+      let arraySize = 0;
+      let isArray = false;
+      if (this.currentToken.type === TokenType.LeftBracket) {
+        this.assert(TokenType.LeftBracket);
+        // 检查下一个token是否为数字
+        const nextToken = this.currentToken;
+        if (nextToken.type === TokenType.Num) {
+          arraySize = nextToken.value;
+          this.assert(TokenType.Num);
+        } else {
+          throw new Error(`Line ${nextToken.line}: Array size must be a number`);
+        }
+        this.assert(TokenType.RightBracket);
+        isArray = true;
+      }
+      
       this.symbolTable.addSymbol(name, TokenType.Id, SymbolClass.Glo, type, 0);
       const symbol = this.symbolTable.getCurrentSymbolOrThrow();
+      
+      // 设置数组信息
+      if (isArray) {
+        symbol.isArray = true;
+        symbol.arraySize = arraySize;
+      }
       
       if (this.currentToken.type === TokenType.LeftParen) {
         // 函数
