@@ -1,0 +1,68 @@
+// 多函数调用、函数嵌套、函数内if-else分支测试
+int add(int a, int b) {
+    return a + b;
+}
+
+int multiply(int x, int y) {
+    return x * y;
+}
+
+int calculate(int num) {
+    int result;
+    
+    if (num > 10) {
+        result = multiply(num, 2);
+        printf("num > 10, multiply by 2: %d\n", result);
+    } else {
+        if (num > 5) {
+            result = add(num, 5);
+            printf("num > 5, add 5: %d\n", result);
+        } else {
+            result = num;
+            printf("num <= 5, keep as is: %d\n", result);
+        }
+    }
+    
+    return result;
+}
+
+int process(int p1, int p2) {
+    int sum;
+    int product;
+    int final;
+    
+    sum = add(p1, p2);
+    product = multiply(p1, p2);
+    final = calculate(sum);
+    
+    printf("p1=%d, p2=%d, sum=%d, product=%d, final=%d\n", p1, p2, sum, product, final);
+    
+    return final;
+}
+
+int main() {
+    int x;
+    int y;
+    int z;
+    int result1;
+    int result2;
+    int result3;
+    
+    x = 8;
+    y = 3;
+    z = 15;
+    
+    printf("Testing nested function calls:\n");
+    
+    result1 = process(x, y);
+    printf("process(%d, %d) = %d\n", x, y, result1);
+    
+    result2 = process(y, z);
+    printf("process(%d, %d) = %d\n", y, z, result2);
+    
+    result3 = process(x, z);
+    printf("process(%d, %d) = %d\n", x, z, result3);
+    
+    printf("All tests completed!\n");
+    return 0;
+}

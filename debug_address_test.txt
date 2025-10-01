@@ -1,0 +1,22 @@
+// 测试地址区分机制
+int global_var;
+
+int test_func(int param) {
+    int local_var;
+    
+    global_var = 42;
+    local_var = 100;
+    
+    printf("global_var = %d\n", global_var);
+    printf("param = %d\n", param);
+    printf("local_var = %d\n", local_var);
+    
+    return global_var + param + local_var;
+}
+
+int main() {
+    int result;
+    result = test_func(10);
+    printf("result = %d\n", result);
+    return 0;
+}

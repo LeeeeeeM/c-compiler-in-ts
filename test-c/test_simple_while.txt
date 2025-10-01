@@ -1,0 +1,11 @@
+// 简单的while循环测试
+int main() {
+    int i;
+    i = 1;
+    while (i <= 3) {
+        printf("i = %d\n", i);
+        i = i + 1;
+    }
+    printf("Done\n");
+    return 0;
+}

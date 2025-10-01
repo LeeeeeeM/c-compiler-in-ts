@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Square, FileText, RotateCcw, ChevronRight, ChevronDown, Terminal } from 'lucide-react';
+import { Square, FileText, RotateCcw, ChevronRight, ChevronDown, Terminal, Play, ChevronDown as ChevronDownIcon } from 'lucide-react';
 import { Compiler } from '../lib/compiler';
 import { VirtualMachine } from '../lib/vm';
 import type { InstructionData, VMState } from '../lib/types';
@@ -16,53 +16,277 @@ interface CompileResult {
   error?: string;
 }
 
-export default function App() {
-  // 状态管理
-  const [sourceCode, setSourceCode] = useState(`// 多层变量遮蔽示例
-int a1;
+// 测试用例接口
+interface TestCase {
+  id: string;
+  name: string;
+  description: string;
+  code: string;
+}
+
+// 测试用例数据
+const testCases: TestCase[] = [
+  {
+    id: 'test_basic',
+    name: '基本变量测试',
+    description: '简单的变量赋值和打印',
+    code: `// 简单测试，不包含 if 语句
+int main() {
+    int x;
+    x = 10;
+    
+    printf("x = %d\\n", x);
+    
+    return 0;
+}`
+  },
+  {
+    id: 'test_simple_while',
+    name: '简单循环测试',
+    description: '基本的while循环',
+    code: `// 简单的while循环测试
+int main() {
+    int i;
+    i = 1;
+    while (i <= 3) {
+        printf("i = %d\\n", i);
+        i = i + 1;
+    }
+    printf("Done\\n");
+    return 0;
+}`
+  },
+  {
+    id: 'test_simple_param',
+    name: '函数参数测试',
+    description: '函数参数传递',
+    code: `int test(int x) {
+   return x;
+}
+
+int main() {
+   printf("result %d", test(42));
+   return 0;
+}`
+  },
+  {
+    id: 'test_simple_if',
+    name: '条件语句测试',
+    description: '基本的if语句',
+    code: `int main() {
+    int x;
+    x = 10;
+    
+    if (x > 5) {
+        printf("x > 5 is true\\n");
+    } else {
+        printf("x > 5 is false\\n");
+    }
+    
+    return 0;
+}`
+  },
+  {
+    id: 'test_simple_pointer',
+    name: '指针测试',
+    description: '基本的指针操作',
+    code: `int main() {
+    int x;
+    int *p;
+    
+    x = 42;
+    p = &x;
+    
+    printf("x = %d\\n", x);
+    printf("&x = %d\\n", (int)&x);
+    printf("p = %d\\n", (int)p);
+    printf("*p = %d\\n", *p);
+    
+    *p = 100;
+    printf("After *p = 100:\\n");
+    printf("x = %d\\n", x);
+    printf("*p = %d\\n", *p);
+    
+    return 0;
+}`
+  },
+  {
+    id: 'test_simple_array',
+    name: '数组测试',
+    description: '基本的数组操作',
+    code: `int main() {
+    int arr[3];
+    
+    // 初始化数组
+    arr[0] = 10;
+    arr[1] = 20;
+    arr[2] = 30;
+    
+    // 打印数组元素
+    printf("arr[0] = %d\\n", arr[0]);
+    printf("arr[1] = %d\\n", arr[1]);
+    printf("arr[2] = %d\\n", arr[2]);
+    
+    // 修改数组元素
+    arr[1] = 99;
+    printf("After modification: arr[1] = %d\\n", arr[1]);
+    
+    return 0;
+}`
+  },
+  {
+    id: 'test_multiplication_table',
+    name: '九九乘法表',
+    description: '嵌套循环生成九九乘法表',
+    code: `int main() {
+    int i, j;
+    
+    printf("九九乘法表:\\n");
+    printf("===========\\n");
+    
+    i = 1;
+    while (i <= 9) {
+        j = 1;
+        while (j <= i) {
+            printf("%d*%d=%d  ", i, j, i * j);
+            j = j + 1;
+        }
+        printf("\\n");
+        i = i + 1;
+    }
+    
+    printf("===========\\n");
+    printf("九九乘法表完成!\\n");
+    
+    return 0;
+}`
+  },
+  {
+    id: 'test_global_hide',
+    name: '变量遮蔽测试',
+    description: '全局变量和局部变量的遮蔽关系',
+    code: `int a1;
 int a3;
 
 int test_func(int a1) {  // 参数遮蔽全局变量
     int a2;
-
     int a3;
-
-    a3 = 40;
     
+    a3 = 40;
     a2 = a1 + 1;
     
     {
-      a1 = 20;
-      a2 = a1 + 1;
-      printf("inner: a1=%d, a2=%d, a3=%d\n", a1, a2, a3);
-      {
-        a1 = 30;
+        a1 = 20;
         a2 = a1 + 1;
-        printf("inner: a1=%d, a2=%d, a3=%d\n", a1, a2, a3);
-      }
+        printf("inner: a1=%d, a2=%d, a3=%d\\n", a1, a2, a3);
+        {
+            a1 = 30;
+            a2 = a1 + 1;
+            printf("inner: a1=%d, a2=%d, a3=%d\\n", a1, a2, a3);
+        }
     }
-    printf("outer: a1=%d, a2=%d, a3=%d\n", a1, a2, a3);
+    printf("outer: a1=%d, a2=%d, a3=%d\\n", a1, a2, a3);
     
     return a2;
 }
 
 int main() {
     int a1;  // 局部变量遮蔽全局变量
-
     int result1;
     
     a1 = 10;
     
-    printf("main: a1=%d\n", a1);
+    printf("main: a1=%d\\n", a1);
     
     result1 = test_func(5);
     
-    printf("Results: result1=%d\n", result1);
-    printf("a1=%d\n", a1);
+    printf("Results: result1=%d\\n", result1);
+    printf("a1=%d\\n", a1);
     
     return 0;
+}`
+  },
+  {
+    id: 'test_nested_functions',
+    name: '嵌套函数调用测试',
+    description: '多函数调用、函数嵌套、函数内if-else分支',
+    code: `// 多函数调用、函数嵌套、函数内if-else分支测试
+int add(int a, int b) {
+    return a + b;
 }
-`);
+
+int multiply(int x, int y) {
+    return x * y;
+}
+
+int calculate(int num) {
+    int result;
+    
+    if (num > 10) {
+        result = multiply(num, 2);
+        printf("num > 10, multiply by 2: %d\\n", result);
+    } else {
+        if (num > 5) {
+            result = add(num, 5);
+            printf("num > 5, add 5: %d\\n", result);
+        } else {
+            result = num;
+            printf("num <= 5, keep as is: %d\\n", result);
+        }
+    }
+    
+    return result;
+}
+
+int process(int p1, int p2) {
+    int sum;
+    int product;
+    int final;
+    
+    sum = add(p1, p2);
+    product = multiply(p1, p2);
+    final = calculate(sum);
+    
+    printf("p1=%d, p2=%d, sum=%d, product=%d, final=%d\\n", p1, p2, sum, product, final);
+    
+    return final;
+}
+
+int main() {
+    int x;
+    int y;
+    int z;
+    int result1;
+    int result2;
+    int result3;
+    
+    x = 8;
+    y = 3;
+    z = 15;
+    
+    printf("Testing nested function calls:\\n");
+    
+    result1 = process(x, y);
+    printf("process(%d, %d) = %d\\n", x, y, result1);
+    
+    result2 = process(y, z);
+    printf("process(%d, %d) = %d\\n", y, z, result2);
+    
+    result3 = process(x, z);
+    printf("process(%d, %d) = %d\\n", x, z, result3);
+    
+    printf("All tests completed!\\n");
+    return 0;
+}`
+  }
+];
+
+export default function App() {
+  // 状态管理
+  const [sourceCode, setSourceCode] = useState(testCases[0].code);
+  const [selectedTestCase, setSelectedTestCase] = useState<string>(testCases[0].id);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
   const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
   const [vmState, setVmState] = useState<VMState | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -72,6 +296,7 @@ int main() {
   const instructionsRef = useRef<HTMLDivElement>(null);
   const stackRef = useRef<HTMLDivElement>(null);
   const [isConsoleVisible, setIsConsoleVisible] = useState(true);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   
   // 指令工具提示状态
   const [tooltipVisible, setTooltipVisible] = useState(false);
@@ -150,10 +375,73 @@ int main() {
     }
   }, [vmState?.pc, vmState?.stack]);
 
+  // 点击外部关闭下拉菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
   // 添加控制台日志
   const addConsoleLog = (message: string) => {
     if (typeof (window as any).consoleAddLog === 'function') {
       (window as any).consoleAddLog(message);
+    }
+  };
+
+  // 选择测试用例
+  const selectTestCase = (testCaseId: string) => {
+    const testCase = testCases.find(tc => tc.id === testCaseId);
+    if (testCase) {
+      setSelectedTestCase(testCaseId);
+      setSourceCode(testCase.code);
+      setIsDropdownOpen(false);
+      setFocusedIndex(-1);
+      addConsoleLog(`已选择测试用例: ${testCase.name}`);
+    }
+  };
+
+  // 处理键盘事件
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (!isDropdownOpen) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        setIsDropdownOpen(true);
+        setFocusedIndex(testCases.findIndex(tc => tc.id === selectedTestCase));
+      }
+      return;
+    }
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        setFocusedIndex(prev => (prev + 1) % testCases.length);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        setFocusedIndex(prev => prev <= 0 ? testCases.length - 1 : prev - 1);
+        break;
+      case 'Enter':
+        event.preventDefault();
+        if (focusedIndex >= 0) {
+          selectTestCase(testCases[focusedIndex].id);
+        }
+        break;
+      case 'Escape':
+        event.preventDefault();
+        setIsDropdownOpen(false);
+        setFocusedIndex(-1);
+        break;
     }
   };
 
@@ -348,15 +636,51 @@ int main() {
                 <p className="text-xs text-slate-500">Interactive C Compiler & Debugger</p>
               </div>
             </div>
+            
+            {/* 测试用例选择器 */}
+            <div className="flex items-center gap-2 ml-6">
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  onKeyDown={handleKeyDown}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 min-w-[200px] justify-between shadow-sm hover:shadow-md"
+                >
+                  <span className="text-slate-700">
+                    {testCases.find(tc => tc.id === selectedTestCase)?.name}
+                  </span>
+                  <ChevronDownIcon 
+                    className={`h-4 w-4 text-slate-500 transition-transform ${
+                      isDropdownOpen ? 'rotate-180' : ''
+                    }`} 
+                  />
+                </button>
+                
+                {isDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-300 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+                    {testCases.map((testCase, index) => (
+                      <button
+                        key={testCase.id}
+                        onClick={() => selectTestCase(testCase.id)}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 transition-colors first:rounded-t-lg last:rounded-b-lg border-b border-slate-100 last:border-b-0 ${
+                          selectedTestCase === testCase.id 
+                            ? 'bg-blue-50 text-blue-700 font-medium border-blue-200' 
+                            : focusedIndex === index
+                            ? 'bg-slate-100 text-slate-800'
+                            : 'text-slate-700'
+                        }`}
+                      >
+                        <div className="font-medium">{testCase.name}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">{testCase.description}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
             </div>
             
             {/* 程序状态显示 */}
             <div className="flex items-center gap-2">
-              {programFinished && (
-                <div className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
-                  ✅ 程序执行完成 (退出码: {exitCode})
-                </div>
-              )}
               {isRunning && (
                 <div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">
                   🔄 程序执行中...
@@ -418,11 +742,16 @@ int main() {
         <div className="w-1/3 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
           <div className="h-full flex flex-col">
             <div className="px-4 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-              <div className="flex items-center" style={{ gap: '8px' }}>
-                <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                <h2 className="text-sm font-semibold text-slate-700 ml-3">C 源代码（可修改）</h2>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center" style={{ gap: '8px' }}>
+                  <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                  <h2 className="text-sm font-semibold text-slate-700 ml-3">C 源代码</h2>
+                </div>
+                <div className="text-xs text-slate-600 bg-slate-200 px-2 py-1 rounded-full">
+                  {testCases.find(tc => tc.id === selectedTestCase)?.description}
+                </div>
               </div>
             </div>
             <div className="flex-1 p-4">
@@ -469,36 +798,51 @@ int main() {
                 <div ref={instructionsRef} className="space-y-2">
                   {compileResult.code.map((instruction, index) => {
                     const isCurrent = vmState && index === vmState.pc;
+                    const hasFunctionName = instruction.functionName;
                     return (
-                      <div
-                        key={index}
-                        className={`p-3 rounded-xl text-sm font-mono transition-all duration-200 ${
-                          isCurrent 
-                            ? 'bg-gradient-to-r from-yellow-100 to-orange-100 border-l-4 border-yellow-500 shadow-lg transform scale-105' 
-                            : 'hover:bg-slate-50 hover:shadow-md'
-                        }`}
-                        onMouseEnter={(e) => handleInstructionHover(instruction, e)}
-                        onMouseLeave={handleInstructionLeave}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className={`text-xs font-bold px-2 py-1 rounded-full ${
-                            isCurrent ? 'bg-yellow-200 text-yellow-800' : 'bg-slate-200 text-slate-600'
-                          }`}>
-                            {index.toString().padStart(3, ' ')}
-                          </span>
-                          <span className="text-blue-600 font-bold text-base">
-                            {getInstructionName(instruction.op)}
-                          </span>
-                          {instruction.arg !== undefined && (
-                            <span className="text-slate-700 font-medium">
-                              {instruction.arg}
+                      <div key={index}>
+                        {/* 函数入口标注 */}
+                        {hasFunctionName && (
+                          <div className="mb-2 px-3 py-2 bg-gradient-to-r from-purple-100 to-pink-100 border-l-4 border-purple-500 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <span className="text-purple-600 font-bold text-sm">🏷️</span>
+                              <span className="text-purple-700 font-semibold text-sm">
+                                函数入口: {instruction.functionName}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* 指令内容 */}
+                        <div
+                          className={`p-3 rounded-xl text-sm font-mono transition-all duration-200 ${
+                            isCurrent 
+                              ? 'bg-gradient-to-r from-yellow-100 to-orange-100 border-l-4 border-yellow-500 shadow-lg transform scale-105' 
+                              : 'hover:bg-slate-50 hover:shadow-md'
+                          }`}
+                          onMouseEnter={(e) => handleInstructionHover(instruction, e)}
+                          onMouseLeave={handleInstructionLeave}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                              isCurrent ? 'bg-yellow-200 text-yellow-800' : 'bg-slate-200 text-slate-600'
+                            }`}>
+                              {index.toString().padStart(3, ' ')}
                             </span>
-                          )}
-                          {isCurrent && (
-                            <span className="ml-auto text-yellow-600 font-bold text-xs bg-yellow-100 px-2 py-1 rounded-full">
-                              ← 当前
+                            <span className="text-blue-600 font-bold text-base">
+                              {getInstructionName(instruction.op)}
                             </span>
-                          )}
+                            {instruction.arg !== undefined && (
+                              <span className="text-slate-700 font-medium">
+                                {instruction.arg}
+                              </span>
+                            )}
+                            {isCurrent && (
+                              <span className="ml-auto text-yellow-600 font-bold text-xs bg-yellow-100 px-2 py-1 rounded-full">
+                                ← 当前
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );

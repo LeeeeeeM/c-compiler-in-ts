@@ -10,8 +10,8 @@ export const Console: React.FC<ConsoleProps> = ({ isVisible, onClose }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [position, setPosition] = useState({ 
-    x: 300, 
-    y: 20 
+    x: 150, 
+    y: 40 
   });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });

@@ -25,6 +25,11 @@ export class CodeGenerator {
     this.code.push({ op, arg });
   }
 
+  // 发射带函数名称标注的指令
+  private emitWithFunctionName(op: Instruction, arg?: any, functionName?: string): void {
+    this.code.push({ op, arg, functionName });
+  }
+
   // 获取当前代码位置
   private getCurrentCodeIndex(): number {
     return this.code.length;
@@ -151,7 +156,7 @@ export class CodeGenerator {
           // 局部变量
           this.emit(Instruction.LEA, this.ibp - tmpPtr.value);
         } else if (tmpPtr.class === SymbolClass.Glo) {
-          // 全局变量
+          // 全局变量 - 直接使用数据段地址，设置标志位
           this.emit(Instruction.IMM, tmpPtr.value);
         } else {
           throw new Error(`Line ${this.currentToken.line}: Invalid variable`);
@@ -728,7 +733,7 @@ export class CodeGenerator {
   }
 
   // 解析函数 - 按照cpc.c的parse_fun逻辑
-  public parseFunction(): void {
+  public parseFunction(functionName?: string): void {
     let i = this.ibp; // bp由NVAR自己处理
     
     // 局部变量必须在前面声明
@@ -790,8 +795,12 @@ export class CodeGenerator {
       this.assert(TokenType.Semicolon);
     }
     
-    // 新建栈帧
-    this.emit(Instruction.NVAR, i - this.ibp);
+    // 在函数入口添加函数名称标注和新建栈帧
+    if (functionName) {
+      this.emitWithFunctionName(Instruction.NVAR, i - this.ibp, functionName);
+    } else {
+      this.emit(Instruction.NVAR, i - this.ibp);
+    }
     
     while (this.currentToken.type !== TokenType.RightBrace) {
       this.parseStatement();
@@ -938,7 +947,7 @@ export class CodeGenerator {
             this.parseParam();
             this.assert(TokenType.RightParen);
             this.assert(TokenType.LeftBrace);
-            this.parseFunction();
+            this.parseFunction(symbol.name);
             
             if (symbol.name === 'main') {
               mainIndex = symbol.value as number;

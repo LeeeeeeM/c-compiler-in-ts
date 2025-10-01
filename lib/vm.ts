@@ -100,19 +100,23 @@ export class VirtualMachine {
         break;
 
       case Instruction.LC:
-        this.state.ax = this.state.data[this.state.ax] || 0;
+        // 从栈读取
+        this.state.ax = this.state.stack[this.state.ax] || 0;
         break;
 
       case Instruction.LI:
-        this.state.ax = this.state.data[this.state.ax] || 0;
+          // 从栈读取
+        this.state.ax = this.state.stack[this.state.ax] || 0;
         break;
 
       case Instruction.SC:
-        this.state.data[this.pop()] = this.state.ax;
+        // 存储到栈
+        this.state.stack[this.pop()] = this.state.ax;
         break;
 
       case Instruction.SI:
-        this.state.data[this.pop()] = this.state.ax;
+        // 检查最高位标识，如果设置了说明是数据段地址
+        this.state.stack[this.pop()] = this.state.ax;
         break;
 
       case Instruction.PUSH:

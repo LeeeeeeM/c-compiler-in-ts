@@ -1,0 +1,16 @@
+// 测试全局指针变量存储栈地址
+int *global_p;
+
+int main() {
+    int local_var;
+    local_var = 100;
+    
+    // 全局指针指向局部变量
+    global_p = &local_var;
+    
+    printf("local_var = %d\n", local_var);
+    printf("global_p = %d\n", global_p);
+    printf("*global_p = %d\n", *global_p);
+    
+    return 0;
+}

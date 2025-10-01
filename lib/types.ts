@@ -184,6 +184,7 @@ export interface Symbol {
 export interface InstructionData {
   op: Instruction;
   arg?: number;
+  functionName?: string; // 函数名称（用于标注函数入口）
 }
 
 // 虚拟机状态

@@ -1,0 +1,8 @@
+int test(int x) {
+   return x;
+}
+
+int main() {
+   printf("result %d", test(42));
+   return 0;
+}

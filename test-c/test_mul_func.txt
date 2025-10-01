@@ -1,0 +1,24 @@
+int a(int a2) {
+   int a3;
+   a3 = 12;
+   return a2 + a3;
+}
+
+int b(int b1) {
+   if (b1 > 5) {
+      printf("bigger than 5");
+   } else {
+      printf("smaller than 5 or equal 5");
+   }
+   return 1;
+}
+
+
+int main() {
+   int r;
+   b(3);
+   b(6);
+   r = a(19);
+   printf("r %d", r);
+   return 0;
+}
