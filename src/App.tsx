@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Square, FileText, RotateCcw, ChevronRight, ChevronDown } from 'lucide-react';
+import { Square, FileText, RotateCcw, ChevronRight, ChevronDown, Terminal } from 'lucide-react';
 import { Compiler } from '../lib/compiler';
 import { VirtualMachine } from '../lib/vm';
 import type { InstructionData, VMState } from '../lib/types';
+import { Console } from './components/Console';
+import { InstructionTooltip } from './components/InstructionTooltip';
 
 // 编译结果接口
 interface CompileResult {
@@ -69,6 +71,12 @@ int main() {
   const [exitCode, setExitCode] = useState<number | null>(null);
   const instructionsRef = useRef<HTMLDivElement>(null);
   const stackRef = useRef<HTMLDivElement>(null);
+  const [isConsoleVisible, setIsConsoleVisible] = useState(true);
+  
+  // 指令工具提示状态
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+  const [tooltipInstruction, setTooltipInstruction] = useState<InstructionData | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
   // 将指令数字转换为指令名称
   const getInstructionName = (op: number): string => {
@@ -100,11 +108,8 @@ int main() {
           // 计算目标滚动位置（元素居中）
           const targetScrollTop = elementTop - (containerHeight / 2) + (elementHeight / 2);
           
-          // 平滑滚动
-          container.scrollTo({
-            top: targetScrollTop,
-            behavior: 'smooth'
-          });
+          // 直接滚动（更快）
+          container.scrollTop = targetScrollTop;
         }
       }
     }
@@ -115,12 +120,20 @@ int main() {
     if (stackRef.current) {
       const container = stackRef.current.parentElement;
       if (container) {
-        container.scrollTo({
-          top: container.scrollHeight,
-          behavior: 'smooth'
-        });
+        container.scrollTop = container.scrollHeight;
       }
     }
+  };
+
+  // 处理指令悬浮事件
+  const handleInstructionHover = (instruction: InstructionData, event: React.MouseEvent) => {
+    setTooltipInstruction(instruction);
+    setTooltipPosition({ x: event.clientX, y: event.clientY });
+    setTooltipVisible(true);
+  };
+
+  const handleInstructionLeave = () => {
+    setTooltipVisible(false);
   };
 
   // 编译器实例
@@ -137,9 +150,18 @@ int main() {
     }
   }, [vmState?.pc, vmState?.stack]);
 
+  // 添加控制台日志
+  const addConsoleLog = (message: string) => {
+    if (typeof (window as any).consoleAddLog === 'function') {
+      (window as any).consoleAddLog(message);
+    }
+  };
+
   // 编译代码
   const compileCode = () => {
     try {
+      addConsoleLog('开始编译源代码...');
+      
       // 重置程序状态
       setProgramFinished(false);
       setExitCode(null);
@@ -148,6 +170,10 @@ int main() {
       const assembly = compiler.getAssemblyContent();
       
       if (result) {
+        addConsoleLog(`编译成功！生成 ${result.code.length} 条指令`);
+        addConsoleLog(`数据段大小: ${result.data.length} 字节`);
+        addConsoleLog(`主函数入口: ${result.mainIndex}`);
+        
         setCompileResult({
           success: true,
           code: result.code,
@@ -172,7 +198,10 @@ int main() {
           ax: 0,
           cycle: 0
         });
+        
+        addConsoleLog('虚拟机初始化完成，准备执行');
       } else {
+        addConsoleLog('编译失败！');
         setCompileResult({
           success: false,
           code: [],
@@ -184,6 +213,7 @@ int main() {
       }
       
     } catch (error) {
+      addConsoleLog(`编译错误: ${error instanceof Error ? error.message : 'Unknown error'}`);
       console.error('Compilation error:', error);
       setCompileResult({
         success: false,
@@ -203,19 +233,28 @@ int main() {
     try {
       // 如果PC为-1，说明程序还没有开始执行，先跳转到main函数
       if (vmState?.pc === -1) {
+        addConsoleLog('程序开始执行，跳转到main函数');
         vm.initialize(compileResult.code, compileResult.data, compileResult.mainIndex);
         const initialState = vm.getState();
         setVmState(initialState);
+        addConsoleLog(`PC: ${initialState.pc}, SP: ${initialState.sp}, BP: ${initialState.bp}`);
         return;
       }
+      
+      const currentInstruction = compileResult.code[vmState?.pc || 0];
+      const instructionName = getInstructionName(currentInstruction.op);
+      addConsoleLog(`执行指令: ${instructionName} ${currentInstruction.arg !== undefined ? currentInstruction.arg : ''}`);
       
       vm.step();
       const state = vm.getState();
       setVmState(state);
       
+      addConsoleLog(`PC: ${state.pc}, SP: ${state.sp}, BP: ${state.bp}, AX: ${state.ax}`);
+      
       // 检查程序是否结束（与VM.execute()逻辑保持一致）
       if (state.pc >= compileResult.code.length) {
         // PC超出代码范围，程序正常结束
+        addConsoleLog('程序正常结束（PC超出代码范围）');
         console.log('Program finished: PC out of bounds', state.pc, 'code length:', compileResult.code.length);
         setProgramFinished(true);
         setExitCode(0); // 正常结束返回0
@@ -225,6 +264,7 @@ int main() {
         // 检查当前指令是否是EXIT
         const currentInstruction = compileResult.code[state.pc];
         if (currentInstruction && currentInstruction.op === 38) { // EXIT指令
+          addConsoleLog(`程序结束（EXIT指令），退出码: ${state.ax}`);
           console.log('Program finished: EXIT instruction at PC', state.pc);
           setProgramFinished(true);
           setExitCode(state.ax);
@@ -433,6 +473,8 @@ int main() {
                             ? 'bg-gradient-to-r from-yellow-100 to-orange-100 border-l-4 border-yellow-500 shadow-lg transform scale-105' 
                             : 'hover:bg-slate-50 hover:shadow-md'
                         }`}
+                        onMouseEnter={(e) => handleInstructionHover(instruction, e)}
+                        onMouseLeave={handleInstructionLeave}
                       >
                         <div className="flex items-center gap-3">
                           <span className={`text-xs font-bold px-2 py-1 rounded-full ${
@@ -617,6 +659,20 @@ int main() {
           </div>
         </div>
       </div>
+      
+      {/* 指令工具提示 */}
+      <InstructionTooltip 
+        instruction={tooltipInstruction!}
+        visible={tooltipVisible}
+        x={tooltipPosition.x}
+        y={tooltipPosition.y}
+      />
+      
+      {/* 控制台组件 */}
+      <Console 
+        isVisible={isConsoleVisible} 
+        onClose={() => setIsConsoleVisible(false)} 
+      />
     </div>
   );
 }
