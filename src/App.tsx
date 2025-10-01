@@ -108,7 +108,7 @@ int main() {
           // 计算目标滚动位置（元素居中）
           const targetScrollTop = elementTop - (containerHeight / 2) + (elementHeight / 2);
           
-          // 直接滚动（更快）
+          // 直接滚动（最快）
           container.scrollTop = targetScrollTop;
         }
       }
@@ -183,7 +183,9 @@ int main() {
         });
         
         // 初始化VM（使用更小的栈大小）
-        const newVm = new VirtualMachine(1024 * 8); // 8KB栈空间
+        const newVm = new VirtualMachine(1024 * 8, (message: string) => {
+          addConsoleLog(`[输出] ${message}`);
+        }); // 8KB栈空间
         newVm.initialize(result.code, result.data, result.mainIndex);
         setVm(newVm);
         
@@ -312,7 +314,9 @@ int main() {
   const reset = () => {
     if (!compileResult?.success) return;
     
-    const newVm = new VirtualMachine(1024 * 8); // 8KB栈空间
+    const newVm = new VirtualMachine(1024 * 8, (message: string) => {
+      addConsoleLog(`[输出] ${message}`);
+    }); // 8KB栈空间
     // 不调用initialize，保持PC为-1
     setVm(newVm);
     // 重置VM状态，PC设置为-1
@@ -418,7 +422,7 @@ int main() {
                 <div className="w-2 h-2 bg-red-400 rounded-full"></div>
                 <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                <h2 className="text-sm font-semibold text-slate-700 ml-3">C 源代码</h2>
+                <h2 className="text-sm font-semibold text-slate-700 ml-3">C 源代码（可修改）</h2>
               </div>
             </div>
             <div className="flex-1 p-4">

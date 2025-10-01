@@ -10,12 +10,13 @@ export const Console: React.FC<ConsoleProps> = ({ isVisible, onClose }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [position, setPosition] = useState({ 
-    x: 400, 
+    x: 300, 
     y: 20 
   });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [hasDragged, setHasDragged] = useState(false);
+  const [startPosition, setStartPosition] = useState({ x: 0, y: 0 });
   const consoleRef = useRef<HTMLDivElement>(null);
   const logsRef = useRef<HTMLDivElement>(null);
 
@@ -42,6 +43,7 @@ export const Console: React.FC<ConsoleProps> = ({ isVisible, onClose }) => {
     e.preventDefault();
     setIsDragging(true);
     setHasDragged(false);
+    setStartPosition({ x: e.clientX, y: e.clientY });
     const rect = consoleRef.current?.getBoundingClientRect();
     if (rect) {
       setDragOffset({
@@ -56,15 +58,15 @@ export const Console: React.FC<ConsoleProps> = ({ isVisible, onClose }) => {
     if (isDragging) {
       e.preventDefault();
       
-      const newX = e.clientX - dragOffset.x;
-      const newY = e.clientY - dragOffset.y;
-      
-      // 检测是否真的在拖拽（移动距离超过3像素）
-      const deltaX = Math.abs(newX - position.x);
-      const deltaY = Math.abs(newY - position.y);
-      if (deltaX > 3 || deltaY > 3) {
+      // 检测是否真的在拖拽（移动距离超过10像素）
+      const deltaX = Math.abs(e.clientX - startPosition.x);
+      const deltaY = Math.abs(e.clientY - startPosition.y);
+      if (deltaX > 10 || deltaY > 10) {
         setHasDragged(true);
       }
+      
+      const newX = e.clientX - dragOffset.x;
+      const newY = e.clientY - dragOffset.y;
       
       // 限制在屏幕范围内
       const maxX = window.innerWidth - (isExpanded ? 384 : 64); // 384 = 96*4, 64 = 16*4
@@ -189,11 +191,17 @@ export const Console: React.FC<ConsoleProps> = ({ isVisible, onClose }) => {
               <p className="text-xs mt-1">编译和执行日志将显示在这里...</p>
             </div>
           ) : (
-            logs.map((log, index) => (
-              <div key={index} className="mb-1 break-words leading-relaxed">
-                {log}
-              </div>
-            ))
+            logs.map((log, index) => {
+              const isOutput = log.includes('[输出]');
+              return (
+                <div 
+                  key={index} 
+                  className={`mb-1 break-words leading-relaxed ${isOutput ? 'text-white' : ''}`}
+                >
+                  {log}
+                </div>
+              );
+            })
           )}
         </div>
 

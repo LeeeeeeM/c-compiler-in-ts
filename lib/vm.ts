@@ -4,9 +4,11 @@ import type { InstructionData, VMState } from './types';
 export class VirtualMachine {
   private state: VMState;
   private maxSize: number;
+  private outputCallback?: (message: string) => void;
 
-  constructor(maxSize: number = 1024 * 1024) {
+  constructor(maxSize: number = 1024 * 1024, outputCallback?: (message: string) => void) {
     this.maxSize = maxSize;
+    this.outputCallback = outputCallback;
     this.state = {
       code: [],
       data: [],
@@ -257,7 +259,11 @@ export class VirtualMachine {
       
       // 处理格式字符串和参数
       const result = this.formatString(formatStr, tmp, argCount);
-      console.log(result);
+      if (this.outputCallback) {
+        this.outputCallback(result);
+      } else {
+        console.log(result);
+      }
     } catch (error) {
       console.error(`printf error: ${error}`);
     }
